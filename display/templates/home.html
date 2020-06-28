@@ -1,0 +1,202 @@
+{% extends 'layout.html' %}
+
+{% block title %}Home{% endblock %}
+
+{% block content %}
+<h2>Home Page</h2>
+<p>Welcome back, {{ username }}!, l'arrosage {% if commande_allume %}
+est {% else %} n'est pas {% endif %} commandé et il est {% if sortie_allume %} allumé{% else %} éteint{% endif %}.</p>
+
+<div class="chart-container" style="position: relative;">
+
+  <canvas id="canvas"></canvas>
+
+</div>
+
+<div class="chart-container" style="position: relative;">
+
+  <canvas id="canvas2"></canvas>
+
+</div>
+<br>
+<br>
+<form action="/" method="post" class="form-example">
+<div class="custom-control custom-switch">
+<input type="checkbox" class="custom-control-input" id="customSwitch1" onChange="submit()" name="bouton_allume" {% if commande_allume %} checked {%endif%}>
+<label class="custom-control-label" for="customSwitch1">Allumer le feu</label>
+</div>
+</form>
+<script>
+  var config = {
+    type: 'line',
+    data: {
+      labels: [ {% for item in labels %}
+                  "{{ item }}",
+                      {% endfor %}],
+      datasets: [{% for dataset in datasets_temperature %}
+      {
+        label: "{{dataset.nom}}",
+        backgroundColor: "{{dataset.backgroundColor}}",
+        borderColor: "{{dataset.borderColor}}",
+	pointRadius: "0",
+        data: [{% for value in dataset.values %}
+          {{value}},
+          {% endfor %}
+        ],
+        fill: false,
+      },
+      {% endfor %}
+    ]
+    },
+    options: {
+      responsive: true,
+      title: {
+        display: true,
+        text: 'Température/Humidité'
+      },
+      tooltips: {
+        mode: 'index',
+        intersect: false,
+      },
+      hover: {
+        mode: 'nearest',
+        intersect: true
+      },
+      scales: {
+        xAxes: [{
+          display: true,
+          scaleLabel: {
+            display: true,
+            labelString: 'Date'
+          }
+        }],
+        yAxes: [{
+          display: true,
+          scaleLabel: {
+            display: true,
+            labelString: 'Valeurs'
+          }
+        }]
+      }
+    }
+  };
+  var config2 = {
+    type: 'line',
+    data: {
+      labels: [ {% for item in labels %}
+                  "{{ item }}",
+                      {% endfor %}],
+      datasets: [{% for dataset in datasets_hygrometrie %}
+      {
+        label: "{{dataset.nom}}",
+        backgroundColor: "{{dataset.backgroundColor}}",
+        borderColor: "{{dataset.borderColor}}",
+	pointRadius: "0",
+        data: [{% for value in dataset.values %}
+          {{value}},
+          {% endfor %}
+        ],
+        fill: false,
+      },
+      {% endfor %}
+    ]
+    },
+    options: {
+      responsive: true,
+      title: {
+        display: true,
+        text: 'Hygrométrie'
+      },
+      tooltips: {
+        mode: 'index',
+        intersect: false,
+      },
+      hover: {
+        mode: 'nearest',
+        intersect: true
+      },
+      scales: {
+        xAxes: [{
+          display: true,
+          scaleLabel: {
+            display: true,
+            labelString: 'Date'
+          }
+        }],
+        yAxes: [{
+          display: true,
+          scaleLabel: {
+            display: true,
+            labelString: 'Valeur'
+          }
+        }]
+      }
+    }
+  };
+  window.onload = function() {
+    var ctx = document.getElementById('canvas').getContext('2d');
+    window.myLine = new Chart(ctx, config);
+    var ctx = document.getElementById('canvas2').getContext('2d');
+    window.myLine = new Chart(ctx, config2);
+  };
+
+  document.getElementById('randomizeData').addEventListener('click', function() {
+    config.data.datasets.forEach(function(dataset) {
+      dataset.data = dataset.data.map(function() {
+        return randomScalingFactor();
+      });
+
+    });
+
+    window.myLine.update();
+  });
+
+  var colorNames = Object.keys(window.chartColors);
+  document.getElementById('addDataset').addEventListener('click', function() {
+    var colorName = colorNames[config.data.datasets.length % colorNames.length];
+    var newColor = window.chartColors[colorName];
+    var newDataset = {
+      label: 'Dataset ' + config.data.datasets.length,
+      backgroundColor: newColor,
+      borderColor: newColor,
+      data: [],
+      fill: false
+    };
+
+    for (var index = 0; index < config.data.labels.length; ++index) {
+      newDataset.data.push(randomScalingFactor());
+    }
+
+    config.data.datasets.push(newDataset);
+    window.myLine.update();
+  });
+
+  document.getElementById('addData').addEventListener('click', function() {
+    if (config.data.datasets.length > 0) {
+      var month = MONTHS[config.data.labels.length % MONTHS.length];
+      config.data.labels.push(month);
+
+      config.data.datasets.forEach(function(dataset) {
+        dataset.data.push(randomScalingFactor());
+      });
+
+      window.myLine.update();
+    }
+  });
+
+  document.getElementById('removeDataset').addEventListener('click', function() {
+    config.data.datasets.splice(0, 1);
+    window.myLine.update();
+  });
+
+  document.getElementById('removeData').addEventListener('click', function() {
+    config.data.labels.splice(-1, 1); // remove the label first
+
+    config.data.datasets.forEach(function(dataset) {
+      dataset.data.pop();
+    });
+
+    window.myLine.update();
+  });
+</script>
+{% endblock %}
