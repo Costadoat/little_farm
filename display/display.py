@@ -5,6 +5,9 @@ import MySQLdb.cursors
 import re
 from time import sleep
 from datetime import datetime, timedelta
+import locale
+
+locale.setlocale(locale.LC_ALL, 'fr_FR.UTF-8')
 
 hier=datetime.now()- timedelta(days=1)
 
@@ -20,9 +23,6 @@ application.config['MYSQL_HOST'] = DATABASE['HOST']
 application.config['MYSQL_USER'] = DATABASE['USER']
 application.config['MYSQL_PASSWORD'] = DATABASE['PASSWORD']
 application.config['MYSQL_DB'] = DATABASE['BASE']
-
-
-print(application.secret_key)
 
 # Intialize MySQL
 mysql = MySQL(application)
@@ -184,8 +184,10 @@ def home():
             sortie_allume=x['Valve']
         cursor.execute("SELECT * FROM reglages WHERE Id=1")
         reglage = cursor.fetchone()
-        print(sortie_allume)
         commande_allume=int(reglage['valeur'])
+        cursor.execute("SELECT Temps FROM sensors ORDER BY Id DESC LIMIT 1")
+        records = cursor.fetchone()
+        last_record=records['Temps']
         line_labels=Temps
         Temperature=data("rgba(186,125,125,1)","rgba(186,125,125,1)",'Température',Temperature_values)
         Humidite=data("rgba(151,187,205,1)","rgba(151,187,205,1)",'Humidité',Humidite_values)
@@ -196,7 +198,7 @@ def home():
         line_values_2=[Hygrometrie_terre_blanc,Hygrometrie_terre_noir, Niveau_eau]
         line_values=[Temperature,Humidite,Hygrometrie_terre_blanc,Hygrometrie_terre_noir, Niveau_eau]
 
-        return render_template('home.html', username=session['username'], title='Capteurs', max=100, labels=line_labels, datasets=line_values, datasets_temperature=line_values_1, datasets_hygrometrie=line_values_2, commande_allume=commande_allume, sortie_allume=sortie_allume)
+        return render_template('home.html', username=session['username'], title='Capteurs', max=100, labels=line_labels, datasets=line_values, datasets_temperature=line_values_1, datasets_hygrometrie=line_values_2, commande_allume=commande_allume, sortie_allume=sortie_allume, last_record=last_record, delta_last_record=int((datetime.now()-last_record).total_seconds()), maintenant=datetime.now())
     # User is not loggedin redirect to login page
     return redirect(url_for('login'))
 

@@ -6,6 +6,9 @@
 <h2>Home Page</h2>
 <p>Welcome back, {{ username }}!, l'arrosage {% if commande_allume %}
 est {% else %} n'est pas {% endif %} commandé et il est {% if sortie_allume %} allumé{% else %} éteint{% endif %}.</p>
+<p> Nous sommes le {{ maintenant.strftime('%A %d %B %Y') }}, il est
+{{maintenant.strftime('%H:%M') }} et le dernier enregistrement date de
+{{delta_last_record}} secondes ({{last_record.strftime('%H:%M')}}). </p>
 
 <div class="chart-container" style="position: relative;">
 
