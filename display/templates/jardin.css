@@ -60,3 +60,8 @@ input:checked + .slider:before {
 .slider.round:before {
   border-radius: 50%;
 } 
+
+.warning {
+  background-color: teal;
+  color: white;
+}

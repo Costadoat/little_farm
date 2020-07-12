@@ -31,7 +31,7 @@ if __name__ == '__main__':
                 data=line.split(';')
                 humid=data[0]
                 temp=data[1]
-                hauteur=data[2]
+                hauteur=35-data[2]
                 hygro_t_b=data[3]
                 hygro_t_n=data[4]
                 valve=data[5]
@@ -54,12 +54,19 @@ if __name__ == '__main__':
                 sql = 'SELECT * FROM reglages WHERE Id=1'
                 mycursor.execute(sql)
                 marche = mycursor.fetchone()
+                sql = 'SELECT * FROM reglages WHERE Id=2'
+                mycursor.execute(sql)
+                duree = mycursor.fetchone()
                 last_time_read=datetime.now()
                 if marche and valve:
                     if marche[2]!=int(valve) :
-                        if marche[2]==1:
+                        if marche[2]==1 and hauteur>=3:
                             ser.write(b'1')
                             last_time_write=last_time_write-timedelta(minutes=2)
                         else:
                             ser.write(b'0')
                             last_time_write=last_time_write-timedelta(minutes=2)
+                    elif marche[2]==int(valve) and hauteur<3:
+                        ser.write(b'0')
+                        last_time_write=last_time_write-timedelta(minutes=2)
+                        

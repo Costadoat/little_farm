@@ -197,8 +197,25 @@ def home():
         line_values_1=[Temperature,Humidite]
         line_values_2=[Hygrometrie_terre_blanc,Hygrometrie_terre_noir, Niveau_eau]
         line_values=[Temperature,Humidite,Hygrometrie_terre_blanc,Hygrometrie_terre_noir, Niveau_eau]
+        if commande_allume!=sortie_allume:
+            class1='warning'
+        else:
+            if commande_allume==1:
+                class1='water'
+            else:
+                class1='ok'
+        if Niveau_eau<4:
+            niveau_bas=1
+            class1='error'
+        else:
+            niveau_bas=0
+        delta_last_record=int((datetime.now()-last_record).total_seconds())
+        if delta_last_record>65:
+            class2='error'
+        else:
+            class2='ok'
 
-        return render_template('home.html', username=session['username'], title='Capteurs', max=100, labels=line_labels, datasets=line_values, datasets_temperature=line_values_1, datasets_hygrometrie=line_values_2, commande_allume=commande_allume, sortie_allume=sortie_allume, last_record=last_record, delta_last_record=int((datetime.now()-last_record).total_seconds()), maintenant=datetime.now())
+        return render_template('home.html', username=session['username'], title='Capteurs', max=100, labels=line_labels, datasets=line_values, datasets_temperature=line_values_1, datasets_hygrometrie=line_values_2, commande_allume=commande_allume, sortie_allume=sortie_allume, last_record=last_record, delta_last_record=delta_last_record, maintenant=datetime.now(), class1=class1, class2=class2)
     # User is not loggedin redirect to login page
     return redirect(url_for('login'))
 

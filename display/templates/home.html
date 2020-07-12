@@ -4,9 +4,10 @@
 
 {% block content %}
 <h2>Home Page</h2>
-<p>Welcome back, {{ username }}!, l'arrosage {% if commande_allume %}
-est {% else %} n'est pas {% endif %} commandé et il est {% if sortie_allume %} allumé{% else %} éteint{% endif %}.</p>
-<p> Nous sommes le {{ maintenant.strftime('%A %d %B %Y') }}, il est
+<p class='{{class1}}'>Welcome back, {{ username }}!, l'arrosage {% if commande_allume %}
+est {% else %} n'est pas {% endif %} commandé et il est {% if
+sortie_allume %} allumé{% else %} éteint{% endif %}.</p>
+<p class='{{class2}}'> Nous sommes le {{ maintenant.strftime('%A %d %B %Y') }}, il est
 {{maintenant.strftime('%H:%M') }} et le dernier enregistrement date de
 {{delta_last_record}} secondes ({{last_record.strftime('%H:%M')}}). </p>
 
@@ -25,7 +26,7 @@ est {% else %} n'est pas {% endif %} commandé et il est {% if sortie_allume %} 
 <br>
 <form action="/" method="post" class="form-example">
 <div class="custom-control custom-switch">
-<input type="checkbox" class="custom-control-input" id="customSwitch1" onChange="submit()" name="bouton_allume" {% if commande_allume %} checked {%endif%}>
+<input type="checkbox" class="custom-control-input" id="customSwitch1" onChange="submit()" name="bouton_allume" {% if commande_allume %} checked {%endif%} {% if niveau_bas %} disabled {%endif%}>
 <label class="custom-control-label" for="customSwitch1">Allumer le feu</label>
 </div>
 </form>
