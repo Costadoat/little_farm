@@ -31,21 +31,28 @@ if __name__ == '__main__':
                 data=line.split(';')
                 humid=data[0]
                 temp=data[1]
-                hauteur=35-data[2]
+                remplissage=data[2]
                 hygro_t_b=data[3]
                 hygro_t_n=data[4]
                 valve=data[5]
+                if valve==-1:
+                    sql = 'UPDATE `reglages` SET `valeur`=0 WHERE Id=1'
+                    mycursor.execute(sql)
+                    sql = 'UPDATE `reglages` SET `valeur`=-1 WHERE Id=2'
+                    mycursor.execute(sql)
+                    valve=0
             except:
                 humid=None
                 temp=None
                 valve=None
                 hygro_t_b=None
                 hygro_t_n=None
-                hauteur=None
+                remplissage=None
             if humid:
                 if last_time_write+timedelta(seconds=delta_write)<datetime.now():
-                    sql = "INSERT INTO sensors (Temps, Humidite, Temperature, hauteur_reservoir, hygrometrie_terre_b, hygrometrie_terre_n, Valve) VALUES (%s, %s, %s, %s, %s, %s, %s)"
-                    val = (datetime.now(), humid, temp, hauteur, hygro_t_b, hygro_t_n, valve)
+                    sql = "INSERT INTO sensors (Temps, Humidite, Temperature, remplissage_reservoir, hygrometrie_terre_b, hygrometrie_terre_n, Valve) VALUES (%s, %s, %s, %s, %s, %s, %s)"
+                    val = (datetime.now(), humid, temp, remplissage, hygro_t_b, hygro_t_n, valve)
+                    print(val)
                     mycursor.execute(sql, val)
                     last_time_write=datetime.now()
                     mydb.commit()
@@ -60,13 +67,13 @@ if __name__ == '__main__':
                 last_time_read=datetime.now()
                 if marche and valve:
                     if marche[2]!=int(valve) :
-                        if marche[2]==1 and hauteur>=3:
+                        if marche[2]==1 and int(remplissage)>=2:
                             ser.write(b'1')
                             last_time_write=last_time_write-timedelta(minutes=2)
                         else:
                             ser.write(b'0')
                             last_time_write=last_time_write-timedelta(minutes=2)
-                    elif marche[2]==int(valve) and hauteur<3:
+                    elif marche[2]==int(valve) and int(remplissage)<2:
                         ser.write(b'0')
                         last_time_write=last_time_write-timedelta(minutes=2)
                         

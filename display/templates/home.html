@@ -11,6 +11,13 @@ sortie_allume %} allumé{% else %} éteint{% endif %}.</p>
 {{maintenant.strftime('%H:%M') }} et le dernier enregistrement date de
 {{delta_last_record}} secondes ({{last_record.strftime('%H:%M')}}). </p>
 
+
+<div class="container" class="progress" style="position: relative;">
+<p> Remplissage du bac
+  <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: {{remplissage}}%;" aria-valuenow="25" aria-valuemin="0" aria-valuemax="100">{{remplissage}}%</div>
+</div>
+
+
 <div class="chart-container" style="position: relative;">
 
   <canvas id="canvas"></canvas>
@@ -23,19 +30,26 @@ sortie_allume %} allumé{% else %} éteint{% endif %}.</p>
 
 </div>
 <br>
-<br>
+<div class="container" style="position: relative;">
 <form action="/" method="post" class="form-example">
+<!--
 <div class="custom-control custom-switch">
 <input type="checkbox" class="custom-control-input" id="customSwitch1" onChange="submit()" name="bouton_allume" {% if commande_allume %} checked {%endif%} {% if niveau_bas %} disabled {%endif%}>
 <label class="custom-control-label" for="customSwitch1">Allumer le feu</label>
 </div>
+-->
+<input class="btn btn-primary" type="submit" value="2 minutes" id="2minutes" onClick="submit()" name="bouton_2min" {% if niveau_bas %} disabled {%endif%}>
+<input class="btn btn-danger" type="submit" value="Stop" id="stop" onClick="submit()" name="stop">
 </form>
+</div>
+<br>
+<br>
 <script>
   var config = {
     type: 'line',
     data: {
       labels: [ {% for item in labels %}
-                  "{{ item }}",
+                  "{{ item.strftime('%d/%m %H:%M') }}",
                       {% endfor %}],
       datasets: [{% for dataset in datasets_temperature %}
       {
@@ -88,7 +102,7 @@ sortie_allume %} allumé{% else %} éteint{% endif %}.</p>
     type: 'line',
     data: {
       labels: [ {% for item in labels %}
-                  "{{ item }}",
+                  "{{ item.strftime('%d/%m %H:%M') }}",
                       {% endfor %}],
       datasets: [{% for dataset in datasets_hygrometrie %}
       {

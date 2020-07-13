@@ -161,16 +161,26 @@ def home():
             else:
                 cursor.execute('UPDATE reglages SET valeur=0 WHERE Id=1')
                 mysql.connection.commit()
+            print(request.form)
+            if 'bouton_2min' in request.form:
+                cursor.execute('UPDATE reglages SET valeur=1 WHERE Id=1')
+                mysql.connection.commit()
+                cursor.execute('UPDATE reglages SET valeur=120 WHERE Id=2')
+                mysql.connection.commit()
+            elif 'bouton_stop' in request.form:
+                cursor.execute('UPDATE reglages SET valeur=0 WHERE Id=1')
+                mysql.connection.commit()
+                cursor.execute('UPDATE reglages SET valeur=-1 WHERE Id=2')
+                mysql.connection.commit()
             sleep(2)
         Temps=[]
         Humidite_values=[]
         Temperature_values=[]
         Hygrometrie_terre_blanc_values=[]
         Hygrometrie_terre_noir_values=[]
-        Hauteur_reservoir_values=[]
+        Remplissage_reservoir_values=[]
         sortie_allume=0
         cursor.execute("SELECT * FROM(SELECT * FROM sensors ORDER BY `Id` DESC LIMIT 1000) t1 ORDER BY t1.Id")
-        print("SELECT * FROM sensors WHERE Temps> '%s'" % (hier))
         cursor.execute("SELECT * FROM sensors WHERE Temps> '%s'" % (hier))
         
         myresult = cursor.fetchall()
@@ -180,7 +190,8 @@ def home():
             Temperature_values.append(x['Temperature'])
             Hygrometrie_terre_blanc_values.append(x['hygrometrie_terre_b'])
             Hygrometrie_terre_noir_values.append(x['hygrometrie_terre_n'])
-            Hauteur_reservoir_values.append(x['hauteur_reservoir'])
+            remplissage=x['remplissage_reservoir']
+            Remplissage_reservoir_values.append(remplissage)
             sortie_allume=x['Valve']
         cursor.execute("SELECT * FROM reglages WHERE Id=1")
         reglage = cursor.fetchone()
@@ -193,7 +204,7 @@ def home():
         Humidite=data("rgba(151,187,205,1)","rgba(151,187,205,1)",'Humidité',Humidite_values)
         Hygrometrie_terre_blanc=data("rgba(153,204,255,1)","rgba(153,204,255,1)",'Hygrométrie terre (blanc)',Hygrometrie_terre_blanc_values)
         Hygrometrie_terre_noir=data("rgba(0,128,255,1)","rgba(0,128,255,1)",'Hygrométrie terre (noir)',Hygrometrie_terre_noir_values)
-        Niveau_eau=data("rgba(186,125,125,1)","rgba(186,125,125,1)","Niveau eau",Hauteur_reservoir_values)
+        Niveau_eau=data("rgba(186,125,125,1)","rgba(186,125,125,1)","Niveau eau",Remplissage_reservoir_values)
         line_values_1=[Temperature,Humidite]
         line_values_2=[Hygrometrie_terre_blanc,Hygrometrie_terre_noir, Niveau_eau]
         line_values=[Temperature,Humidite,Hygrometrie_terre_blanc,Hygrometrie_terre_noir, Niveau_eau]
@@ -204,10 +215,11 @@ def home():
                 class1='water'
             else:
                 class1='ok'
-        if Niveau_eau<4:
+        if remplissage<2:
             niveau_bas=1
-            class1='error'
+            class3='error'
         else:
+            class3=''
             niveau_bas=0
         delta_last_record=int((datetime.now()-last_record).total_seconds())
         if delta_last_record>65:
@@ -215,7 +227,7 @@ def home():
         else:
             class2='ok'
 
-        return render_template('home.html', username=session['username'], title='Capteurs', max=100, labels=line_labels, datasets=line_values, datasets_temperature=line_values_1, datasets_hygrometrie=line_values_2, commande_allume=commande_allume, sortie_allume=sortie_allume, last_record=last_record, delta_last_record=delta_last_record, maintenant=datetime.now(), class1=class1, class2=class2)
+        return render_template('home.html', username=session['username'], title='Capteurs', max=100, labels=line_labels, datasets=line_values, datasets_temperature=line_values_1, datasets_hygrometrie=line_values_2, commande_allume=commande_allume, sortie_allume=sortie_allume, last_record=last_record, delta_last_record=delta_last_record, maintenant=datetime.now(), class1=class1, class2=class2, class3=class3, remplissage=remplissage)
     # User is not loggedin redirect to login page
     return redirect(url_for('login'))
 

@@ -43,7 +43,7 @@ void loop()
     Serial.println(value);
    }
     if (on==1 && abs(value)>0 ) {digitalWrite(valve_pin, HIGH);Serial.print(value);Serial.println("start");value-=1;}
-    else {on=0;value=-1;digitalWrite(valve_pin, LOW);Serial.println("stop");}
+    else {on=-1;value=-1;digitalWrite(valve_pin, LOW);Serial.println("stop");}
  
  // Lecture du capteur d'humidité/température
  // La lecture du capteur prend 250ms
@@ -61,6 +61,8 @@ void loop()
   long measure = pulseIn(ECHO_PIN, HIGH, MEASURE_TIMEOUT); 
   /* 3. Calcul la distance à partir du temps mesuré */
   float distance_mm = measure / 2.0 * SOUND_SPEED;
+  float distance_cm = distance_mm / 10.0;
+  float remplissage = (35.0 - distance_cm) / 100.0;
 
   // Lecture des capteur d'hygrométrie du sol   
   float sensor_ground_white_value = 100.*(1023.-analogRead(sensor_ground_white_pin))/1023.; 
@@ -68,23 +70,19 @@ void loop()
   sensor_ground_white_value=1.12;
   /* Communication serie */
  
-  Serial.print("Humidite: ");
   Serial.print(h);
-  Serial.print(" %\t");
-  Serial.print("Temperature: ");
+  Serial.print(";");
   Serial.print(t);
-  Serial.println(" *C ");
-
-  Serial.print(F("Distance: "));
-  Serial.print(distance_mm / 10.0, 2);
-  Serial.println(F("cm, "));
-  
-  Serial.print("Humidite sol blanc: ");
-  Serial.print(sensor_ground_white_value);
-  Serial.print(" %\t");
-  Serial.print("Humidite sol noir: ");
-  Serial.print(sensor_ground_black_value);
-  Serial.println(" % ");
+  Serial.print(";");
+  Serial.print(remplissage, 2);
+  Serial.print(";");
+  Serial.print(sensor_ground_white_value,2);
+  Serial.print(";");
+  Serial.print(sensor_ground_black_value,2);
+  Serial.print(";");
+  Serial.print(on);
+  Serial.print(";");
+  Serial.println(value);
   delay(900);
  
 }
