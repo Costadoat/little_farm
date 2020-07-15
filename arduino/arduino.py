@@ -26,7 +26,7 @@ if __name__ == '__main__':
     while True:
         if ser.in_waiting > 0:
             line = ser.readline().decode('utf-8').rstrip()
-#            print(line)
+            print(line)
             try :
                 data=line.split(';')
                 humid=data[0]
@@ -61,19 +61,20 @@ if __name__ == '__main__':
                 sql = 'SELECT * FROM reglages WHERE Id=1'
                 mycursor.execute(sql)
                 marche = mycursor.fetchone()
+                print(marche)
                 sql = 'SELECT * FROM reglages WHERE Id=2'
                 mycursor.execute(sql)
                 duree = mycursor.fetchone()
+                print(duree)
                 last_time_read=datetime.now()
-                if marche and valve:
-                    if marche[2]!=int(valve) :
-                        if marche[2]==1 and int(remplissage)>=2:
-                            ser.write(b'1')
-                            last_time_write=last_time_write-timedelta(minutes=2)
-                        else:
-                            ser.write(b'0')
-                            last_time_write=last_time_write-timedelta(minutes=2)
-                    elif marche[2]==int(valve) and int(remplissage)<2:
-                        ser.write(b'0')
+                if marche[2]!=int(valve) :
+                    if marche[2]==1 and float(remplissage)>=2.:
+                        ser.write(b'1,%i' % int(duree[2]))
                         last_time_write=last_time_write-timedelta(minutes=2)
+                    else:
+                        ser.write(b'0,-1')
+                        last_time_write=last_time_write-timedelta(minutes=2)
+                elif marche[2]==int(valve) and float(remplissage)<2:
+                    ser.write(b'0,-1')
+                    last_time_write=last_time_write-timedelta(minutes=2)
                         

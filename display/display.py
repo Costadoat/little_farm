@@ -193,8 +193,11 @@ def home():
             remplissage=x['remplissage_reservoir']
             Remplissage_reservoir_values.append(remplissage)
             sortie_allume=x['Valve']
+            if sortie_allume==-1:
+                sortie_allume=0
         cursor.execute("SELECT * FROM reglages WHERE Id=1")
         reglage = cursor.fetchone()
+        print(reglage['valeur'])
         commande_allume=int(reglage['valeur'])
         cursor.execute("SELECT Temps FROM sensors ORDER BY Id DESC LIMIT 1")
         records = cursor.fetchone()

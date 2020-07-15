@@ -39,7 +39,10 @@ sortie_allume %} allumé{% else %} éteint{% endif %}.</p>
 </div>
 -->
 <input class="btn btn-primary" type="submit" value="2 minutes" id="2minutes" onClick="submit()" name="bouton_2min" {% if niveau_bas %} disabled {%endif%}>
+&nbsp;&nbsp;
 <input class="btn btn-danger" type="submit" value="Stop" id="stop" onClick="submit()" name="stop">
+&nbsp;&nbsp;
+<button class="btn btn-success" onClick="window.location.reload();">Rafraichir</button>
 </form>
 </div>
 <br>
