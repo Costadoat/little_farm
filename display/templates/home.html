@@ -42,7 +42,7 @@ sortie_allume %} allumé{% else %} éteint{% endif %}.</p>
 &nbsp;&nbsp;
 <input class="btn btn-danger" type="submit" value="Stop" id="stop" onClick="submit()" name="stop">
 &nbsp;&nbsp;
-<button class="btn btn-success" onClick="window.location.reload();">Rafraichir</button>
+<input class="btn btn-success" type="submit" value="Rafraichir" id="refresh" onClick="submit()" name="refresh">
 </form>
 </div>
 <br>
@@ -146,6 +146,9 @@ sortie_allume %} allumé{% else %} éteint{% endif %}.</p>
         }],
         yAxes: [{
           display: true,
+          ticks: {
+              beginAtZero: true   // minimum value will be 0.
+          },
           scaleLabel: {
             display: true,
             labelString: 'Valeur'

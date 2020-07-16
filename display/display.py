@@ -9,7 +9,7 @@ import locale
 
 locale.setlocale(locale.LC_ALL, 'fr_FR.UTF-8')
 
-hier=datetime.now()- timedelta(days=1)
+start_time=datetime.now()- timedelta(days=2)
 
 from local_settings import DATABASE
 
@@ -181,7 +181,7 @@ def home():
         Remplissage_reservoir_values=[]
         sortie_allume=0
         cursor.execute("SELECT * FROM(SELECT * FROM sensors ORDER BY `Id` DESC LIMIT 1000) t1 ORDER BY t1.Id")
-        cursor.execute("SELECT * FROM sensors WHERE Temps> '%s'" % (hier))
+        cursor.execute("SELECT * FROM sensors WHERE Temps> '%s'" % (start_time))
         
         myresult = cursor.fetchall()
         for x in myresult:
@@ -209,7 +209,7 @@ def home():
         Hygrometrie_terre_noir=data("rgba(0,128,255,1)","rgba(0,128,255,1)",'Hygrométrie terre (noir)',Hygrometrie_terre_noir_values)
         Niveau_eau=data("rgba(186,125,125,1)","rgba(186,125,125,1)","Niveau eau",Remplissage_reservoir_values)
         line_values_1=[Temperature,Humidite]
-        line_values_2=[Hygrometrie_terre_blanc,Hygrometrie_terre_noir, Niveau_eau]
+        line_values_2=[Hygrometrie_terre_blanc,Hygrometrie_terre_noir]
         line_values=[Temperature,Humidite,Hygrometrie_terre_blanc,Hygrometrie_terre_noir, Niveau_eau]
         if commande_allume!=sortie_allume:
             class1='warning'
