@@ -35,23 +35,28 @@ if __name__ == '__main__':
                 hygro_t_b=data[3]
                 hygro_t_n=data[4]
                 valve=data[5]
-                if valve==-1:
+                timer=data[6]
+                if valve=='-1':
                     sql = 'UPDATE `reglages` SET `valeur`=0 WHERE Id=1'
                     mycursor.execute(sql)
+                    mydb.commit()
                     sql = 'UPDATE `reglages` SET `valeur`=-1 WHERE Id=2'
                     mycursor.execute(sql)
+                    mydb.commit()
                     valve=0
+                    ser.write(b'0,-1')
             except:
                 humid=None
                 temp=None
                 valve=None
+                timer=None
                 hygro_t_b=None
                 hygro_t_n=None
                 remplissage=None
             if humid:
                 if last_time_write+timedelta(seconds=delta_write)<datetime.now():
-                    sql = "INSERT INTO sensors (Temps, Humidite, Temperature, remplissage_reservoir, hygrometrie_terre_b, hygrometrie_terre_n, Valve) VALUES (%s, %s, %s, %s, %s, %s, %s)"
-                    val = (datetime.now(), humid, temp, remplissage, hygro_t_b, hygro_t_n, valve)
+                    sql = "INSERT INTO sensors (Temps, Humidite, Temperature, remplissage_reservoir, hygrometrie_terre_b, hygrometrie_terre_n, Valve, timer) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"
+                    val = (datetime.now(), humid, temp, remplissage, hygro_t_b, hygro_t_n, valve, timer)
                     print(val)
                     mycursor.execute(sql, val)
                     last_time_write=datetime.now()

@@ -42,6 +42,7 @@ void loop()
     value  = Serial.readStringUntil('\0').toInt();
    }
     if (on==1 && abs(value)>0 ) {digitalWrite(valve_pin, HIGH);value-=1;}
+    else if (on==0) {on=0;value=-1;digitalWrite(valve_pin, LOW);}
     else {on=-1;value=-1;digitalWrite(valve_pin, LOW);}
  
  // Lecture du capteur d'humidité/température
