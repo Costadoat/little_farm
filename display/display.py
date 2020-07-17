@@ -151,7 +151,7 @@ def pie():
 @application.route('/', methods=['GET', 'POST'])
 def home():
     # Check if user is loggedin
-    if 'loggedin' in session:
+    if 'loggedin' in session and session['id']==1:
         # User is loggedin show them the home page
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
         if request.method == 'POST':
