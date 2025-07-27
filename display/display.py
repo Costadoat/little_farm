@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+	# -*- coding: utf-8 -*-
 from flask import Flask, render_template, request, redirect, url_for, session
 from flask_mysqldb import MySQL
 import MySQLdb.cursors
@@ -20,6 +20,7 @@ application.secret_key = 'zffuiaozeguzbeunf13znfepZU11213333BV'
 
 # Enter your database connection details below
 application.config['MYSQL_HOST'] = DATABASE['HOST']
+application.config['MYSQL_PORT'] = DATABASE['PORT']
 application.config['MYSQL_USER'] = DATABASE['USER']
 application.config['MYSQL_PASSWORD'] = DATABASE['PASSWORD']
 application.config['MYSQL_DB'] = DATABASE['BASE']
@@ -179,7 +180,6 @@ def home():
         Hygrometrie_terre_blanc_values=[]
         Hygrometrie_terre_noir_values=[]
         Remplissage_reservoir_values=[]
-        sortie_allume=0
         cursor.execute("SELECT * FROM(SELECT * FROM sensors ORDER BY `Id` DESC LIMIT 1000) t1 ORDER BY t1.Id")
         cursor.execute("SELECT * FROM sensors WHERE Temps> '%s'" % (start_time))
         
@@ -192,13 +192,8 @@ def home():
             Hygrometrie_terre_noir_values.append(x['hygrometrie_terre_n'])
             remplissage=x['remplissage_reservoir']
             Remplissage_reservoir_values.append(remplissage)
-            sortie_allume=x['Valve']
-            if sortie_allume==-1:
-                sortie_allume=0
         cursor.execute("SELECT * FROM reglages WHERE Id=1")
         reglage = cursor.fetchone()
-        print(reglage['valeur'])
-        commande_allume=int(reglage['valeur'])
         cursor.execute("SELECT Temps FROM sensors ORDER BY Id DESC LIMIT 1")
         records = cursor.fetchone()
         last_record=records['Temps']
@@ -207,30 +202,18 @@ def home():
         Humidite=data("rgba(151,187,205,1)","rgba(151,187,205,1)",'Humidité',Humidite_values)
         Hygrometrie_terre_blanc=data("rgba(153,204,255,1)","rgba(153,204,255,1)",'Hygrométrie terre (blanc)',Hygrometrie_terre_blanc_values)
         Hygrometrie_terre_noir=data("rgba(0,128,255,1)","rgba(0,128,255,1)",'Hygrométrie terre (noir)',Hygrometrie_terre_noir_values)
-        Niveau_eau=data("rgba(186,125,125,1)","rgba(186,125,125,1)","Niveau eau",Remplissage_reservoir_values)
+        Niveau_eau=data("rgba(245,75,39,1)","rgba(245,75,39,1)","Niveau eau",Remplissage_reservoir_values)
         line_values_1=[Temperature,Humidite]
         line_values_2=[Hygrometrie_terre_blanc,Hygrometrie_terre_noir]
+        line_values_3=[Niveau_eau]
         line_values=[Temperature,Humidite,Hygrometrie_terre_blanc,Hygrometrie_terre_noir, Niveau_eau]
-        if commande_allume!=sortie_allume:
-            class1='warning'
-        else:
-            if commande_allume==1:
-                class1='water'
-            else:
-                class1='ok'
-        if remplissage<2:
-            niveau_bas=1
-            class3='error'
-        else:
-            class3=''
-            niveau_bas=0
         delta_last_record=int((datetime.now()-last_record).total_seconds())
-        if delta_last_record>65:
+        if delta_last_record>600:
             class2='error'
         else:
             class2='ok'
 
-        return render_template('home.html', username=session['username'], title='Capteurs', max=100, labels=line_labels, datasets=line_values, datasets_temperature=line_values_1, datasets_hygrometrie=line_values_2, commande_allume=commande_allume, sortie_allume=sortie_allume, last_record=last_record, delta_last_record=delta_last_record, maintenant=datetime.now(), class1=class1, class2=class2, class3=class3, remplissage=remplissage)
+        return render_template('home.html', username=session['username'], title='Capteurs', max=100, labels=line_labels, datasets=line_values, datasets_temperature=line_values_1, datasets_hygrometrie=line_values_2, datasets_niveau=line_values_3, last_record=last_record, delta_last_record=delta_last_record, maintenant=datetime.now(), class2=class2, remplissage=remplissage)
     # User is not loggedin redirect to login page
     return redirect(url_for('login'))
 
