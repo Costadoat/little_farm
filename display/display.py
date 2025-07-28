@@ -180,8 +180,8 @@ def home():
         Hygrometrie_terre_blanc_values=[]
         Hygrometrie_terre_noir_values=[]
         Remplissage_reservoir_values=[]
-        cursor.execute("SELECT * FROM(SELECT * FROM sensors ORDER BY `Id` DESC LIMIT 1000) t1 ORDER BY t1.Id")
-        cursor.execute("SELECT * FROM sensors WHERE Temps> '%s'" % (start_time))
+        cursor.execute("SELECT * FROM(SELECT * FROM sensors ORDER BY `Id` DESC LIMIT 500) t1 ORDER BY t1.Id")
+#        cursor.execute("SELECT * FROM sensors WHERE Temps> '%s'" % (start_time))
         
         myresult = cursor.fetchall()
         for x in myresult:

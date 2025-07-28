@@ -33,8 +33,8 @@ DHT dht(dhtpin, DHT22);
 
 // configuration des variables
 int lastrecord; // temps du dernier enregistrement
-int deltarecord = 60; // durée entre deux enregistrements en secondes
-int wateringduration = 2*60; // durée d'un arrosage en secondes
+int deltarecord = 10*60; // durée entre deux enregistrements en secondes
+unsigned long wateringduration = 2*60; // durée d'un arrosage en secondes
 unsigned long timerwatering;
 int TerreBlanc;
 int TerreNoir;
@@ -284,6 +284,16 @@ void loop() {
       {
       SerialESP8266.println("api_key=tPmAT5Ab&Heure=1&Temp="+String(AirTemperature)+"&Hum="+String(AirHumidite)+"&Dist="+String(Distances[0])+"&TNoir="+String(TerreNoir)+"&TBlanc="+String(TerreBlanc));
       Serial.println("Demande Réglage heure");
+      }
+      else if (incomingByte=="on")
+
+      {
+        Serial.print("Arrosage : ");
+        showTime();
+        digitalWrite(relay_led_pin, HIGH);
+        digitalWrite(relay_pin, HIGH);
+        timerwatering=millis()+wateringduration*1000;
+
       }
     }
 
