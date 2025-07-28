@@ -7,8 +7,6 @@ from time import sleep
 from datetime import datetime, timedelta
 import locale
 
-locale.setlocale(locale.LC_ALL, 'fr_FR.UTF-8')
-
 start_time=datetime.now()- timedelta(days=2)
 
 from local_settings import DATABASE
@@ -128,25 +126,6 @@ class data:
         self.nom = nom
         self.values = values
 
-@application.route('/bar')
-def bar():
-    bar_labels=labels
-    bar_values=values
-    return render_template('bar_chart.html', title='Bitcoin Monthly Price in USD', max=17000, labels=bar_labels, values=bar_values)
-
-@application.route('/line')
-def line():
-    labels=[1,2]
-    values=[2,5]
-    line_labels=labels
-    line_values=values
-    return render_template('line_chart.html', title='Bitcoin Monthly Price in USD', max=5, labels=line_labels, values=line_values)
-
-@application.route('/pie')
-def pie():
-    pie_labels = labels
-    pie_values = values
-    return render_template('pie_chart.html', title='Bitcoin Monthly Price in USD', max=17000, set=zip(values, labels, colors))
 
 # http://localhost:5000/pythinlogin/home - this will be the home page, only accessible for loggedin users
 @application.route('/', methods=['GET', 'POST'])
@@ -186,12 +165,11 @@ def home():
         myresult = cursor.fetchall()
         for x in myresult:
             Temps.append(x['Temps'])
-            Humidite_values.append(x['Humidite'])
-            Temperature_values.append(x['Temperature'])
-            Hygrometrie_terre_blanc_values.append(x['hygrometrie_terre_b'])
-            Hygrometrie_terre_noir_values.append(x['hygrometrie_terre_n'])
-            remplissage=x['remplissage_reservoir']
-            Remplissage_reservoir_values.append(remplissage)
+            Humidite_values.append([x['Temps'],x['Humidite']])
+            Temperature_values.append([x['Temps'],x['Temperature']])
+            Hygrometrie_terre_blanc_values.append([x['Temps'],x['hygrometrie_terre_b']])
+            Hygrometrie_terre_noir_values.append([x['Temps'],x['hygrometrie_terre_n']])
+            Remplissage_reservoir_values.append([x['Temps'],x['remplissage_reservoir']])
         cursor.execute("SELECT * FROM reglages WHERE Id=1")
         reglage = cursor.fetchone()
         cursor.execute("SELECT Temps FROM sensors ORDER BY Id DESC LIMIT 1")
@@ -213,7 +191,7 @@ def home():
         else:
             class2='ok'
 
-        return render_template('home.html', username=session['username'], title='Capteurs', max=100, labels=line_labels, datasets=line_values, datasets_temperature=line_values_1, datasets_hygrometrie=line_values_2, datasets_niveau=line_values_3, last_record=last_record, delta_last_record=delta_last_record, maintenant=datetime.now(), class2=class2, remplissage=remplissage)
+        return render_template('home.html', username=session['username'], title='Capteurs', max=100, labels=line_labels, datasets=line_values, datasets_temperature=line_values_1, datasets_hygrometrie=line_values_2, datasets_niveau=line_values_3, last_record=last_record, delta_last_record=delta_last_record, maintenant=datetime.now(), class2=class2)
     # User is not loggedin redirect to login page
     return redirect(url_for('login'))
 
