@@ -4,7 +4,7 @@ from flask_mysqldb import MySQL
 import MySQLdb.cursors
 import re
 from time import sleep
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta,timezone
 import locale
 
 start_time=datetime.now()- timedelta(days=2)
@@ -164,12 +164,13 @@ def home():
         
         myresult = cursor.fetchall()
         for x in myresult:
-            Temps.append(x['Temps'])
-            Humidite_values.append([x['Temps'],x['Humidite']])
-            Temperature_values.append([x['Temps'],x['Temperature']])
-            Hygrometrie_terre_blanc_values.append([x['Temps'],x['hygrometrie_terre_b']])
-            Hygrometrie_terre_noir_values.append([x['Temps'],x['hygrometrie_terre_n']])
-            Remplissage_reservoir_values.append([x['Temps'],x['remplissage_reservoir']])
+            temps=x['Temps']-timedelta(hours=2)
+            Temps.append(temps)
+            Humidite_values.append([temps,x['Humidite']])
+            Temperature_values.append([temps,x['Temperature']])
+            Hygrometrie_terre_blanc_values.append([temps,x['hygrometrie_terre_b']])
+            Hygrometrie_terre_noir_values.append([temps,x['hygrometrie_terre_n']])
+            Remplissage_reservoir_values.append([temps,x['remplissage_reservoir']])
         cursor.execute("SELECT * FROM reglages WHERE Id=1")
         reglage = cursor.fetchone()
         cursor.execute("SELECT Temps FROM sensors ORDER BY Id DESC LIMIT 1")

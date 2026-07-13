@@ -2,10 +2,9 @@
 #include <DS3231.h>
 #include <Wire.h>
 #include <DHT.h>
-#include <HCSR04.h>
 
 // parametrage des pins carte
-int triggerPin = 10;
+int trigPin = 10;
 int echoPin = 11;
 int dhtpin = 4;
 int relay_led_pin = 13;
@@ -31,9 +30,10 @@ SoftwareSerial SerialESP8266(SerialESP8266RXpin,SerialESP8266TXpin);
 DS3231  rtc;
 DHT dht(dhtpin, DHT22);
 
+long duree; // durée de l'echo
 // configuration des variables
 int lastrecord; // temps du dernier enregistrement
-int deltarecord = 10*60; // durée entre deux enregistrements en secondes
+int deltarecord = 5*60; // durée entre deux enregistrements en secondes
 unsigned long wateringduration = 2*60; // durée d'un arrosage en secondes
 unsigned long timerwatering;
 int TerreBlanc;
@@ -42,7 +42,7 @@ int TerreBlancd;
 int TerreNoird;
 float AirHumidite;
 float AirTemperature;
-double* Distances;
+float Distance;
 int heures;
 int minutes;
 int secondes;
@@ -176,7 +176,7 @@ void showData()
     Serial.print(", AirHumidite=");
     Serial.print(AirHumidite);
     Serial.print(", Distance=");
-    Serial.print(Distances[0]);
+    Serial.print(Distance);
     Serial.print(", TerreNoir=");
     Serial.print(TerreNoir);
     Serial.print(", TerreBlanc=");
@@ -194,9 +194,11 @@ void setup() {
   alarmDay = rtc.getDate();
   alarmH12 = false;
   alarmHour = 20;
-  alarmMinute = 00;
-  alarmSecond = 00; // initialize to the interval length
-  alarmBits = 0b00001000; // Alarm 1 when seconds match
+  alarmMinute = 0;
+  alarmSecond = 0; // initialize to the interval length
+  alarmBits = 0b00001000; // Alarm 1 when hours minuts seconds match
+//  alarmBits = 0b00001100; // Alarm 1 when minuts seconds match
+//  alarmBits = 0b00001110; // Alarm 1 when seconds match
   alarmDayIsDay = false; // using date of month
 
   // Upload initial parameters of Alarm 1
@@ -229,7 +231,8 @@ void setup() {
   SerialESP8266.begin(9600);
   pinMode(relay_pin, OUTPUT);
   pinMode(relay_led_pin, OUTPUT);
-  HCSR04.begin(triggerPin, echoPin);
+  pinMode(trigPin, OUTPUT); // Configuration du port du Trigger comme une SORTIE 
+  pinMode(echoPin, INPUT); // Configuration du port de l'Echo comme une ENTREE 
   lastrecord=TimeNow();
   SerialESP8266.setTimeout(250);
   delay(1000);
@@ -249,8 +252,15 @@ void loop() {
   TerreNoird = digitalRead(7);
   AirHumidite = dht.readHumidity();
   AirTemperature = dht.readTemperature();
-  Distances = HCSR04.measureDistanceCm();
-
+  digitalWrite(trigPin, LOW); 
+  delayMicroseconds(5); 
+  digitalWrite(trigPin, HIGH); 
+  delayMicroseconds(10); 
+  digitalWrite(trigPin, LOW); 
+  // Écoute de l'écho 
+  duree = pulseIn(echoPin, HIGH); 
+  // Calcul de la distance 
+  Distance = duree*0.034/2; 
   // if alarm went of, do alarm stuff
     if (tick) {
         // disable Alarm 1 interrupt
@@ -273,7 +283,7 @@ void loop() {
     }
     if (TimeNow()-lastrecord>deltarecord)
     {
-      SerialESP8266.println("api_key=tPmAT5Ab&Heure=0&Temp="+String(AirTemperature)+"&Hum="+String(AirHumidite)+"&Dist="+String(Distances[0])+"&TNoir="+String(TerreNoir)+"&TBlanc="+String(TerreBlanc));
+      SerialESP8266.println("api_key=tPmAT5Ab&Heure=0&Temp="+String(AirTemperature)+"&Hum="+String(AirHumidite)+"&Dist="+String(Distance)+"&TNoir="+String(TerreNoir)+"&TBlanc="+String(TerreBlanc));
       Serial.println("Data Sent");
       lastrecord=TimeNow();
     }
@@ -282,7 +292,7 @@ void loop() {
       String incomingByte = Serial.readStringUntil('\n');
       if (incomingByte=="heure")
       {
-      SerialESP8266.println("api_key=tPmAT5Ab&Heure=1&Temp="+String(AirTemperature)+"&Hum="+String(AirHumidite)+"&Dist="+String(Distances[0])+"&TNoir="+String(TerreNoir)+"&TBlanc="+String(TerreBlanc));
+      SerialESP8266.println("api_key=tPmAT5Ab&Heure=1&Temp="+String(AirTemperature)+"&Hum="+String(AirHumidite)+"&Dist="+String(Distance)+"&TNoir="+String(TerreNoir)+"&TBlanc="+String(TerreBlanc));
       Serial.println("Demande Réglage heure");
       }
       else if (incomingByte=="on")
@@ -299,6 +309,7 @@ void loop() {
 
     if (SerialESP8266.available()>0) {
       String input = SerialESP8266.readString();
+      Serial.println(input);
       set_param(input);
     }  
     delay(1000);

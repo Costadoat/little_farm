@@ -12,7 +12,7 @@ Pour transférer le code sur le ESP8266 :
 
 #ifndef STASSID
 #define STASSID "CLAMAISON"
-#define STAPSK "ZLC*j}=10K,s2mLB;J+34Zo8.<x>yKrn0YGkDbO?SdTs4,o*nL,-d*P-+Xh=?GU"
+#define STAPSK "MOTDEPASSEDUWIFI"
 #endif
 
 
