@@ -5,31 +5,99 @@
 {% block content %}
 <h2>Mesures</h2>
 <p class='{{class2}}'> Nous sommes le {{ maintenant.strftime('%A %d %B %Y') }}, il est
-{{maintenant.strftime('%H:%M') }} et le dernier enregistrement date de
-{{delta_last_record}} secondes ({{last_record.strftime('%H:%M')}}). </p>
+{{maintenant.strftime('%H:%M') }}{% if last_record %} et le dernier enregistrement date de
+{{delta_last_record}} secondes ({{last_record.strftime('%H:%M')}}){% else %} — aucune donnée reçue pour le moment{% endif %}. </p>
 
-<!--
-<div class="container" class="progress" style="position: relative;">
-<p> Remplissage du bac
-  <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: {{remplissage}}%;" aria-valuenow="25" aria-valuemin="0" aria-valuemax="100">{{remplissage}}%</div>
+{% if dernieres %}
+<div class="cards-grid">
+  <div class="metric-card">
+    <i class="fas fa-thermometer-half"></i>
+    <span class="metric-value">{{ "%.1f"|format(dernieres['Temperature']) }}°C</span>
+    <span class="metric-label">Température air</span>
+  </div>
+  <div class="metric-card">
+    <i class="fas fa-tint"></i>
+    <span class="metric-value">{{ "%.0f"|format(dernieres['Humidite']) }}%</span>
+    <span class="metric-label">Humidité air</span>
+  </div>
+  <div class="metric-card">
+    <i class="fas fa-water"></i>
+    <span class="metric-value">{{ "%.0f"|format(dernieres['remplissage_reservoir']) }} cm</span>
+    <span class="metric-label">Niveau réservoir</span>
+  </div>
+  <div class="metric-card">
+    <i class="fas fa-seedling"></i>
+    <span class="metric-value">{{ dernieres['hygrometrie_terre_b'] }}</span>
+    <span class="metric-label">Terre (blanc)</span>
+  </div>
+  <div class="metric-card">
+    <i class="fas fa-seedling"></i>
+    <span class="metric-value">{{ dernieres['hygrometrie_terre_n'] }}</span>
+    <span class="metric-label">Terre (noir)</span>
+  </div>
 </div>
--->
+{% endif %}
+
+<div class="water-card {{ 'pending' if arrosage_demande else '' }}">
+  <div class="water-card-text">
+    <i class="fas fa-faucet"></i>
+    <div>
+      <strong>Arrosage</strong>
+      {% if arrosage_demande %}
+        <p>Une demande d'arrosage est en attente — la carte la prendra en compte dans les 10 secondes.</p>
+      {% else %}
+        <p>Aucun arrosage en cours. Tu peux déclencher un arrosage manuel ci-dessous.</p>
+      {% endif %}
+    </div>
+  </div>
+  <form method="POST" class="water-card-form">
+    <select name="duree">
+      <option value="60">1 min</option>
+      <option value="120" selected>2 min</option>
+      <option value="300">5 min</option>
+    </select>
+    <button type="submit" name="bouton_arroser" class="btn-water" {{ 'disabled' if arrosage_demande else '' }}>
+      <i class="fas fa-play"></i> Arroser maintenant
+    </button>
+    <button type="submit" name="bouton_stop" class="btn-stop" {{ 'disabled' if not arrosage_demande else '' }}>
+      <i class="fas fa-stop"></i> Annuler
+    </button>
+  </form>
+</div>
+
+{% if historique_arrosages %}
+<div class="history-card">
+  <h3><i class="fas fa-history"></i> Historique des arrosages</h3>
+  <table class="history-table">
+    <thead>
+      <tr><th>Date</th><th>Durée</th><th>Déclenché par</th></tr>
+    </thead>
+    <tbody>
+      {% for a in historique_arrosages %}
+      <tr>
+        <td>{{ a['Debut'].strftime('%d/%m %H:%M') }}</td>
+        <td>{{ (a['Duree'] // 60) }} min {{ '%02d'|format(a['Duree'] % 60) }}s</td>
+        <td>
+          {% if a['Source'] == 'web' %}<i class="fas fa-mouse-pointer"></i> Bouton web
+          {% elif a['Source'] == 'programme' %}<i class="fas fa-clock"></i> Programmé
+          {% else %}{{ a['Source'] }}{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
 
 <div class="chart-container" style="position: relative;">
-
   <canvas id="canvas"></canvas>
-
 </div>
 
 <div class="chart-container" style="position: relative;">
-
   <canvas id="canvas2"></canvas>
-
 </div>
 <div class="chart-container" style="position: relative;">
-
   <canvas id="canvas3"></canvas>
-
 </div>
 <script>
   var config = {
@@ -144,7 +212,10 @@
     window.myLine = new Chart(ctx, config2);
     var ctx = document.getElementById('canvas3').getContext('2d');
     window.myLine = new Chart(ctx, config3);
-      };
+  };
 
+  // Rafraîchissement automatique toutes les 30s pour suivre l'état
+  // de l'arrosage sans avoir à recharger la page manuellement
+  setTimeout(function() { window.location.reload(); }, 30000);
 </script>
 {% endblock %}

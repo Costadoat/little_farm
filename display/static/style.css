@@ -162,3 +162,169 @@ body.loggedin {
 	padding: 5px;
 	margin: 0 0 10px 0;
 }
+
+/* ===================== Ajouts : cartes de mesures + bouton arrosage ===================== */
+
+.cards-grid {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 15px;
+	margin: 25px 0;
+}
+
+.metric-card {
+	flex: 1 1 160px;
+	background-color: #fff;
+	box-shadow: 0 0 5px 0 rgba(0, 0, 0, 0.1);
+	padding: 20px;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	text-align: center;
+}
+
+.metric-card i {
+	font-size: 22px;
+	color: #3274d6;
+	margin-bottom: 8px;
+}
+
+.metric-card .metric-value {
+	font-size: 24px;
+	font-weight: bold;
+	color: #4a536e;
+}
+
+.metric-card .metric-label {
+	font-size: 13px;
+	color: #9da3ac;
+	margin-top: 4px;
+}
+
+.water-card {
+	background-color: #fff;
+	box-shadow: 0 0 5px 0 rgba(0, 0, 0, 0.1);
+	margin: 25px 0;
+	padding: 20px 25px;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 15px;
+	border-left: 5px solid #87a8c4;
+}
+
+.water-card.pending {
+	border-left: 5px solid #ee925d;
+}
+
+.water-card-text {
+	display: flex;
+	align-items: center;
+	gap: 15px;
+}
+
+.water-card-text i {
+	font-size: 28px;
+	color: #87a8c4;
+}
+
+.water-card.pending .water-card-text i {
+	color: #ee925d;
+}
+
+.water-card-text p {
+	margin: 4px 0 0 0;
+	color: #7b8291;
+	font-size: 14px;
+}
+
+.water-card-form {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex-wrap: wrap;
+}
+
+.water-card-form select {
+	height: 42px;
+	border: 1px solid #dee0e4;
+	padding: 0 10px;
+}
+
+.btn-water, .btn-stop {
+	height: 42px;
+	padding: 0 18px;
+	border: 0;
+	font-weight: bold;
+	cursor: pointer;
+	color: #fff;
+	transition: background-color 0.2s;
+}
+
+.btn-water {
+	background-color: #3274d6;
+}
+
+.btn-water:hover:not(:disabled) {
+	background-color: #2868c7;
+}
+
+.btn-stop {
+	background-color: #b5bac1;
+}
+
+.btn-stop:hover:not(:disabled) {
+	background-color: #9da3ac;
+}
+
+.btn-water:disabled, .btn-stop:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+@media (max-width: 1000px) {
+	.content, .navtop div {
+		width: 100%;
+		padding: 0 15px;
+	}
+}
+
+.history-card {
+	background-color: #fff;
+	box-shadow: 0 0 5px 0 rgba(0, 0, 0, 0.1);
+	margin: 25px 0;
+	padding: 20px 25px;
+}
+
+.history-card h3 {
+	margin: 0 0 15px 0;
+	font-size: 16px;
+	color: #4a536e;
+}
+
+.history-table {
+	width: 100%;
+	border-collapse: collapse;
+}
+
+.history-table th {
+	text-align: left;
+	font-size: 12px;
+	text-transform: uppercase;
+	color: #9da3ac;
+	padding: 6px 10px;
+	border-bottom: 1px solid #e0e0e3;
+}
+
+.history-table td {
+	padding: 8px 10px;
+	font-size: 14px;
+	color: #4a536e;
+	border-bottom: 1px solid #f0f0f3;
+}
+
+.history-table i {
+	color: #3274d6;
+	margin-right: 6px;
+}
