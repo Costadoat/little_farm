@@ -11,6 +11,43 @@ start_time = datetime.now() - timedelta(days=2)
 
 from local_settings import DATABASE
 
+# ---- Formatage en français, sans dépendre de la locale du serveur ---------
+JOURS_FR = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche']
+MOIS_FR = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet',
+           'août', 'septembre', 'octobre', 'novembre', 'décembre']
+
+
+def format_date_fr(dt):
+    """ex: 'mardi 14 juillet 2026' """
+    return "{} {} {} {}".format(JOURS_FR[dt.weekday()], dt.day, MOIS_FR[dt.month - 1], dt.year)
+
+
+def format_duration_fr(total_seconds):
+    """Durée lisible, ex: '2 jours 3 heures', '5 minutes 12 secondes'.
+    Affiche au plus les deux unités les plus significatives."""
+    total_seconds = int(total_seconds)
+    if total_seconds <= 0:
+        return "0 seconde"
+    units = [
+        ('an', 365 * 86400),
+        ('mois', 30 * 86400),
+        ('jour', 86400),
+        ('heure', 3600),
+        ('minute', 60),
+        ('seconde', 1),
+    ]
+    parts = []
+    remaining = total_seconds
+    for name, size in units:
+        value = remaining // size
+        if value > 0:
+            suffix = 's' if value > 1 and name != 'mois' else ''
+            parts.append("{} {}{}".format(value, name, suffix))
+            remaining -= value * size
+        if len(parts) == 2:
+            break
+    return " ".join(parts)
+
 application = Flask(__name__)
 
 # Change this to your secret key (can be anything, it's for extra protection)
@@ -118,6 +155,19 @@ class data:
         self.values = values
 
 
+# Plages disponibles pour la navigation des graphes. "interval" est injecté
+# directement dans le SQL (INTERVAL ...) : ces valeurs sont des constantes
+# fixes définies ici, jamais issues de l'entrée utilisateur, donc sans risque
+# d'injection malgré l'absence de placeholder à cet endroit précis.
+# "bucket_seconds" agrège les mesures par moyenne sur des tranches de N
+# secondes côté SQL, pour limiter le nombre de points envoyés au navigateur.
+RANGE_OPTIONS = {
+    'heure':   {'label': 'Dernière heure',   'interval': '1 HOUR', 'limit': 800,  'unit': 'minute', 'bucket_seconds': None},
+    'jour':    {'label': 'Dernier jour',     'interval': '1 DAY',  'limit': 800,  'unit': 'hour',   'bucket_seconds': 900},   # 15 min -> ~96 points
+    'semaine': {'label': 'Dernière semaine', 'interval': '7 DAY',  'limit': 2500, 'unit': 'day',    'bucket_seconds': 7200},  # 2h -> ~84 points
+}
+
+
 @application.route('/', methods=['GET', 'POST'])
 def home():
     if 'loggedin' in session and session['id'] == 1:
@@ -136,6 +186,27 @@ def home():
             elif 'bouton_stop' in request.form:
                 cursor.execute('UPDATE reglages SET valeur=0 WHERE Id=1')
                 mysql.connection.commit()
+            # Formulaire "Programmation" : change l'heure de l'arrosage automatique
+            elif 'bouton_programmer' in request.form:
+                heure_prog = request.form.get('heure_prog', '')
+                # attendu au format HH:MM (input type="time")
+                if re.match(r'^\d{1,2}:\d{2}$', heure_prog):
+                    h, m = heure_prog.split(':')
+                    h, m = int(h), int(m)
+                    if 0 <= h <= 23 and 0 <= m <= 59:
+                        cursor.execute('UPDATE reglages SET valeur=%s WHERE Id=4', (h,))
+                        cursor.execute('UPDATE reglages SET valeur=%s WHERE Id=5', (m,))
+                        mysql.connection.commit()
+
+            # Pattern Post/Redirect/Get : on redirige vers la page en GET après
+            # traitement du formulaire, pour que le rafraîchissement automatique
+            # (et un simple F5) ne réexécute jamais un POST déjà traité.
+            return redirect(url_for('home'))
+
+        selected_range = request.args.get('range', 'jour')
+        if selected_range not in RANGE_OPTIONS:
+            selected_range = 'jour'
+        range_conf = RANGE_OPTIONS[selected_range]
 
         Temps = []
         Humidite_values = []
@@ -143,7 +214,28 @@ def home():
         Hygrometrie_terre_blanc_values = []
         Hygrometrie_terre_noir_values = []
         Remplissage_reservoir_values = []
-        cursor.execute("SELECT * FROM(SELECT * FROM sensors ORDER BY `Id` DESC LIMIT 500) t1 ORDER BY t1.Id")
+
+        if range_conf['bucket_seconds']:
+            # Moyenne par tranche de temps : beaucoup plus léger à charger/
+            # afficher qu'une mesure brute toutes les 5 minutes.
+            bucket = range_conf['bucket_seconds']
+            cursor.execute(
+                "SELECT FROM_UNIXTIME(FLOOR(UNIX_TIMESTAMP(Temps)/%s)*%s) AS Temps, "
+                "AVG(Humidite) AS Humidite, AVG(Temperature) AS Temperature, "
+                "AVG(hygrometrie_terre_b) AS hygrometrie_terre_b, "
+                "AVG(hygrometrie_terre_n) AS hygrometrie_terre_n, "
+                "AVG(remplissage_reservoir) AS remplissage_reservoir "
+                "FROM sensors WHERE Temps >= (NOW() - INTERVAL " + range_conf['interval'] + ") "
+                "GROUP BY Temps ORDER BY Temps",
+                (bucket, bucket)
+            )
+        else:
+            cursor.execute(
+                "SELECT * FROM (SELECT * FROM sensors WHERE Temps >= (NOW() - INTERVAL "
+                + range_conf['interval'] +
+                ") ORDER BY `Id` DESC LIMIT %s) t1 ORDER BY t1.Id",
+                (range_conf['limit'],)
+            )
 
         myresult = cursor.fetchall()
         for x in myresult:
@@ -155,12 +247,29 @@ def home():
             Hygrometrie_terre_noir_values.append([temps, x['hygrometrie_terre_n']])
             Remplissage_reservoir_values.append([temps, x['remplissage_reservoir']])
 
+        # Instants d'arrosage sur la même plage que les mesures affichées,
+        # pour les superposer aux graphes sous forme de barres verticales.
+        cursor.execute(
+            "SELECT Debut FROM arrosages WHERE Debut >= (NOW() - INTERVAL "
+            + range_conf['interval'] + ") ORDER BY Debut"
+        )
+        arrosage_instants = [row['Debut'] - timedelta(hours=2) for row in cursor.fetchall()]
+
         cursor.execute("SELECT valeur FROM reglages WHERE Id=1")
         reglage_row = cursor.fetchone()
         arrosage_demande = bool(reglage_row and reglage_row['valeur'] == 1)
 
         cursor.execute("SELECT Debut, Duree, Source FROM arrosages ORDER BY Id DESC LIMIT 10")
         historique_arrosages = cursor.fetchall()
+
+        cursor.execute("SELECT valeur FROM reglages WHERE Id=4")
+        heure_row = cursor.fetchone()
+        cursor.execute("SELECT valeur FROM reglages WHERE Id=5")
+        minute_row = cursor.fetchone()
+        heure_prog = '{:02d}:{:02d}'.format(
+            heure_row['valeur'] if heure_row else 20,
+            minute_row['valeur'] if minute_row else 0,
+        )
 
         cursor.execute("SELECT Temps FROM sensors ORDER BY Id DESC LIMIT 1")
         records = cursor.fetchone()
@@ -188,6 +297,22 @@ def home():
         else:
             class2 = 'ok'
 
+        maintenant = datetime.now()
+        date_aujourdhui_fr = format_date_fr(maintenant)
+
+        if delta_last_record is not None:
+            duree_depuis_dernier_enregistrement_fr = format_duration_fr(delta_last_record)
+            if delta_last_record > 86400:
+                # Décalage de plus de 24h : le jour est plus informatif que l'heure seule
+                last_record_display = "{} à {}".format(
+                    format_date_fr(last_record), last_record.strftime('%H:%M')
+                )
+            else:
+                last_record_display = last_record.strftime('%H:%M')
+        else:
+            duree_depuis_dernier_enregistrement_fr = None
+            last_record_display = None
+
         return render_template(
             'home.html',
             username=session['username'],
@@ -199,11 +324,19 @@ def home():
             datasets_niveau=line_values_3,
             last_record=last_record,
             delta_last_record=delta_last_record,
-            maintenant=datetime.now(),
+            maintenant=maintenant,
+            date_aujourdhui_fr=date_aujourdhui_fr,
+            duree_depuis_dernier_enregistrement_fr=duree_depuis_dernier_enregistrement_fr,
+            last_record_display=last_record_display,
             class2=class2,
             arrosage_demande=arrosage_demande,
             dernieres=dernieres,
             historique_arrosages=historique_arrosages,
+            heure_prog=heure_prog,
+            selected_range=selected_range,
+            range_options=RANGE_OPTIONS,
+            chart_unit=range_conf['unit'],
+            arrosage_instants=arrosage_instants,
         )
     return redirect(url_for('login'))
 

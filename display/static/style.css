@@ -328,3 +328,32 @@ body.loggedin {
 	color: #3274d6;
 	margin-right: 6px;
 }
+
+.range-nav {
+	display: flex;
+	gap: 8px;
+	flex-wrap: wrap;
+	margin: 10px 0 20px 0;
+}
+
+.range-nav a {
+	text-decoration: none;
+	color: #4a536e;
+	background-color: #fff;
+	border: 1px solid #dee0e4;
+	padding: 8px 16px;
+	font-size: 14px;
+	transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.range-nav a:hover {
+	border-color: #3274d6;
+	color: #3274d6;
+}
+
+.range-nav a.active {
+	background-color: #3274d6;
+	border-color: #3274d6;
+	color: #fff;
+	font-weight: bold;
+}

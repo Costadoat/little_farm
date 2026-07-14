@@ -4,9 +4,9 @@
 
 {% block content %}
 <h2>Mesures</h2>
-<p class='{{class2}}'> Nous sommes le {{ maintenant.strftime('%A %d %B %Y') }}, il est
+<p class='{{class2}}'> Nous sommes le {{ date_aujourdhui_fr }}, il est
 {{maintenant.strftime('%H:%M') }}{% if last_record %} et le dernier enregistrement date de
-{{delta_last_record}} secondes ({{last_record.strftime('%H:%M')}}){% else %} — aucune donnée reçue pour le moment{% endif %}. </p>
+{{duree_depuis_dernier_enregistrement_fr}} ({{last_record_display}}){% else %} — aucune donnée reçue pour le moment{% endif %}. </p>
 
 {% if dernieres %}
 <div class="cards-grid">
@@ -65,6 +65,22 @@
   </form>
 </div>
 
+<div class="water-card">
+  <div class="water-card-text">
+    <i class="fas fa-clock"></i>
+    <div>
+      <strong>Arrosage programmé</strong>
+      <p>Déclenché automatiquement chaque jour à cette heure.</p>
+    </div>
+  </div>
+  <form method="POST" class="water-card-form">
+    <input type="time" name="heure_prog" value="{{ heure_prog }}" required>
+    <button type="submit" name="bouton_programmer" class="btn-water">
+      <i class="fas fa-check"></i> Enregistrer
+    </button>
+  </form>
+</div>
+
 {% if historique_arrosages %}
 <div class="history-card">
   <h3><i class="fas fa-history"></i> Historique des arrosages</h3>
@@ -89,6 +105,13 @@
 </div>
 {% endif %}
 
+<h3>Historique des mesures</h3>
+<div class="range-nav">
+  {% for key, opt in range_options.items() %}
+  <a href="{{ url_for('home', range=key) }}" class="{{ 'active' if key == selected_range else '' }}">{{ opt.label }}</a>
+  {% endfor %}
+</div>
+
 <div class="chart-container" style="position: relative;">
   <canvas id="canvas"></canvas>
 </div>
@@ -100,6 +123,37 @@
   <canvas id="canvas3"></canvas>
 </div>
 <script>
+  var chartUnit = "{{ chart_unit }}";
+  var arrosageInstants = [{% for a in arrosage_instants %}"{{ a.strftime('%Y-%m-%dT%H:%M:%SZ') }}",{% endfor %}];
+
+  // Plugin maison : trace une ligne verticale a chaque instant d'arrosage,
+  // superposee aux courbes de mesures.
+  var arrosageLinesPlugin = {
+    id: 'arrosageLines',
+    afterDraw: function(chart) {
+      if (!arrosageInstants || arrosageInstants.length === 0) return;
+      var xScale = chart.scales.x;
+      if (!xScale) return;
+      var ctx = chart.ctx;
+      var top = chart.chartArea.top;
+      var bottom = chart.chartArea.bottom;
+      ctx.save();
+      ctx.strokeStyle = 'rgba(50, 116, 214, 0.55)';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 4]);
+      arrosageInstants.forEach(function(iso) {
+        var x = xScale.getPixelForValue(new Date(iso).getTime());
+        if (x >= chart.chartArea.left && x <= chart.chartArea.right) {
+          ctx.beginPath();
+          ctx.moveTo(x, top);
+          ctx.lineTo(x, bottom);
+          ctx.stroke();
+        }
+      });
+      ctx.restore();
+    }
+  };
+
   var config = {
     type: 'line',
     data: {
@@ -125,7 +179,7 @@
         x: {
           type: 'time',
           time: {
-          unit: 'hour',
+          unit: chartUnit,
           displayFormats: {
             day: 'DD',
             hour: 'dd LLL T'
@@ -135,6 +189,7 @@
     }
     }
   };
+  config.plugins = [arrosageLinesPlugin];
   var config2 = {
     type: 'line',
     data: {
@@ -160,7 +215,7 @@
         x: {
           type: 'time',
           time: {
-          unit: 'hour',
+          unit: chartUnit,
           displayFormats: {
             day: 'DD',
             hour: 'dd LLL T'
@@ -170,6 +225,7 @@
     }
     }
   };
+  config2.plugins = [arrosageLinesPlugin];
   var config3 = {
     type: 'line',
     data: {
@@ -195,7 +251,7 @@
         x: {
           type: 'time',
           time: {
-          unit: 'hour',
+          unit: chartUnit,
           displayFormats: {
             day: 'DD',
             hour: 'dd LLL T'
@@ -205,6 +261,7 @@
     }
     }
   };
+  config3.plugins = [arrosageLinesPlugin];
   window.onload = function() {
     var ctx = document.getElementById('canvas').getContext('2d');
     window.myLine = new Chart(ctx, config);

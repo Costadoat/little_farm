@@ -10,7 +10,7 @@ $user = "jardin";
 $pawd = "MOTDEPASSEBDD";
 $bdd  = "little_farm";
 $host = "localhost";
-$API_KEY = "APIKEY";
+$API_KEY = "tPmAT5Ab";
 
 $conn = @new mysqli($host, $user, $pawd, $bdd);
 if ($conn->connect_error) {
@@ -25,13 +25,13 @@ if ($_SERVER["REQUEST_METHOD"] !== "POST") {
     exit;
 }
 
-if (!isset($_POST["api_key"]) || !hash_equals($API_KEY, (string) $_POST["api_key"])) {
+if (!isset($_POST["api_key"]) || !hash_equals($API_KEY, trim((string) $_POST["api_key"]))) {
     echo '55';
     exit;
 }
 
 // ---- 1) Demande de réglage de l'heure ------------------------------------
-if (isset($_POST["Heure"]) && $_POST["Heure"] === '1') {
+if (isset($_POST["Heure"]) && trim($_POST["Heure"]) === '1') {
     date_default_timezone_set('Europe/Paris');
     echo '3,' . date('N d m Y G i s');
     exit;
@@ -39,12 +39,26 @@ if (isset($_POST["Heure"]) && $_POST["Heure"] === '1') {
 
 // ---- 2) Sondage : la carte demande s'il y a un ordre en attente ----------
 // (déclenché toutes les ~10s par l'Arduino, voir Jardin.ino)
-if (isset($_POST["poll"]) && $_POST["poll"] === '1') {
+if (isset($_POST["poll"]) && trim($_POST["poll"]) === '1') {
     $stmt = $conn->prepare("SELECT valeur FROM reglages WHERE Id = 1");
     $stmt->execute();
     $stmt->bind_result($etat);
     $stmt->fetch();
     $stmt->close();
+
+    $stmt = $conn->prepare("SELECT valeur FROM reglages WHERE Id = 4");
+    $stmt->execute();
+    $stmt->bind_result($heureProg);
+    $stmt->fetch();
+    $stmt->close();
+    $heureProg = ($heureProg !== null) ? intval($heureProg) : 20;
+
+    $stmt = $conn->prepare("SELECT valeur FROM reglages WHERE Id = 5");
+    $stmt->execute();
+    $stmt->bind_result($minuteProg);
+    $stmt->fetch();
+    $stmt->close();
+    $minuteProg = ($minuteProg !== null) ? intval($minuteProg) : 0;
 
     if ($etat == 1) {
         $stmt = $conn->prepare("SELECT valeur FROM reglages WHERE Id = 2");
@@ -60,15 +74,18 @@ if (isset($_POST["poll"]) && $_POST["poll"] === '1') {
         $stmt->execute();
         $stmt->close();
 
-        echo '5,' . $duree; // 5 = "démarre l'arrosage pendant N secondes"
+        // 5 = "démarre l'arrosage pendant N secondes", suivi de l'heure programmée
+        echo '5,' . $duree . ',' . $heureProg . ',' . $minuteProg;
         exit;
     }
-    echo '0,';
+    // 0 = rien à arroser ; on renvoie quand même l'heure programmée pour que
+    // la carte reste synchronisée si elle a été changée depuis le site
+    echo '0,' . $heureProg . ',' . $minuteProg;
     exit;
 }
 
 // ---- 3) Signalement d'un arrosage démarré (pour l'historique) ------------
-if (isset($_POST["arrosage_event"]) && $_POST["arrosage_event"] === '1') {
+if (isset($_POST["arrosage_event"]) && trim($_POST["arrosage_event"]) === '1') {
     $duree  = isset($_POST['Duree']) ? intval($_POST['Duree']) : 0;
     $source = isset($_POST['Source']) ? substr(trim($_POST['Source']), 0, 20) : 'inconnu';
 

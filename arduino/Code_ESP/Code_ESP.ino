@@ -12,7 +12,7 @@ Pour transférer le code sur le ESP8266 :
 
 #ifndef STASSID
 #define STASSID "CLAMAISON"
-#define STAPSK  "MOTDEPASSEDUWIFI"
+#define STAPSK  "MOTDEPASSEWIFI"
 #endif
 
 // IMPORTANT : ce mot de passe WiFi est en clair dans ce fichier .ino.
@@ -21,9 +21,13 @@ Pour transférer le code sur le ESP8266 :
 
 const char* SERVER_URL = "http://192.168.1.6/jardin.php";
 unsigned long lastWifiCheck = 0;
+int failedAttempts = 0;
+const int MAX_FAILED_ATTEMPTS = 6; // ~1 minute de tentatives avant redemarrage complet
 
 void connectWifi() {
   Serial.print("Connexion WiFi");
+  WiFi.disconnect(); // repart d'un etat propre plutot que de re-begin() par dessus une connexion cassee
+  delay(100);
   WiFi.begin(STASSID, STAPSK);
   unsigned long start = millis();
   while (WiFi.status() != WL_CONNECTED && millis() - start < 15000) {
@@ -35,9 +39,19 @@ void connectWifi() {
     Serial.print("Connecté ! IP : ");
     Serial.println(WiFi.localIP());
     digitalWrite(LED_BUILTIN, LOW);
+    failedAttempts = 0;
   } else {
     Serial.println("");
     Serial.println("Echec de connexion WiFi, nouvelle tentative au prochain envoi.");
+    failedAttempts++;
+    if (failedAttempts >= MAX_FAILED_ATTEMPTS) {
+      // La pile WiFi de l'ESP8266 peut se bloquer apres plusieurs echecs
+      // (necessitant sinon un debranchement manuel) : on force un vrai
+      // redemarrage logiciel, equivalent a rebrancher la carte.
+      Serial.println("Trop d'echecs, redemarrage de l'ESP...");
+      delay(200);
+      ESP.restart();
+    }
   }
 }
 
