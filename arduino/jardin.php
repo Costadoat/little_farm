@@ -7,10 +7,15 @@
 // pense à les changer (mot de passe MySQL + api_key) une fois
 // que tu auras mis ce fichier en place.
 $user = "jardin";
-$pawd = "MOTDEPASSEBDD";
+$pawd = "Jardin75Arduino!";
 $bdd  = "little_farm";
 $host = "localhost";
 $API_KEY = "tPmAT5Ab";
+
+// Calibrage du capteur ultrason, doit rester cohérent avec les
+// constantes RESERVOIR_DIST_PLEIN_CM / RESERVOIR_DIST_VIDE_CM du sketch Arduino.
+const RESERVOIR_DIST_PLEIN_CM = 26.0; // 100 %
+const RESERVOIR_DIST_VIDE_CM  = 54.0; //   0 %
 
 $conn = @new mysqli($host, $user, $pawd, $bdd);
 if ($conn->connect_error) {
@@ -110,11 +115,23 @@ $dist   = floatval($_POST['Dist']);
 $tblanc = floatval($_POST['TBlanc']);
 $tnoir  = floatval($_POST['TNoir']);
 
+// Niveau de remplissage en % : la carte l'envoie désormais directement
+// (champ Niveau). On garde un calcul de secours à partir de Dist pour
+// rester compatible avec un firmware plus ancien qui ne l'enverrait pas.
+if (isset($_POST['Niveau'])) {
+    $niveau = floatval($_POST['Niveau']);
+} else {
+    $niveau = (RESERVOIR_DIST_VIDE_CM - $dist)
+             / (RESERVOIR_DIST_VIDE_CM - RESERVOIR_DIST_PLEIN_CM) * 100.0;
+}
+if ($niveau < 0)   $niveau = 0;
+if ($niveau > 100) $niveau = 100;
+
 $stmt = $conn->prepare(
     "INSERT INTO sensors (Temps, Humidite, Temperature, remplissage_reservoir, hygrometrie_terre_b, hygrometrie_terre_n)
      VALUES (NOW(), ?, ?, ?, ?, ?)"
 );
-$stmt->bind_param("ddddd", $hum, $temp, $dist, $tblanc, $tnoir);
+$stmt->bind_param("ddddd", $hum, $temp, $niveau, $tblanc, $tnoir);
 
 if ($stmt->execute()) {
     echo '1,1';

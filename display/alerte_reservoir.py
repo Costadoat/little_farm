@@ -17,8 +17,8 @@ from datetime import datetime, timedelta
 
 import MySQLdb
 
-from local_settings import DATABASE, EMAIL_CONFIG, DISTANCE_ALERTE_CM, \
-    DISTANCE_RETOUR_NORMAL_CM, DELAI_MIN_ENTRE_ALERTES_HEURES
+from local_settings import DATABASE, EMAIL_CONFIG, NIVEAU_ALERTE_PCT, \
+    NIVEAU_RETOUR_NORMAL_PCT, DELAI_MIN_ENTRE_ALERTES_HEURES
 
 
 def send_email(subject, body):
@@ -53,14 +53,14 @@ def main():
         conn.close()
         return
 
-    distance = last['remplissage_reservoir']
+    niveau = last['remplissage_reservoir']  # en %, 100 = plein, 0 = vide
 
     cursor.execute("SELECT DerniereAlerte, EnAlerte FROM alertes WHERE Id=1")
     etat = cursor.fetchone()
     deja_en_alerte = bool(etat and etat['EnAlerte'])
     derniere_alerte = etat['DerniereAlerte'] if etat else None
 
-    if distance >= DISTANCE_ALERTE_CM:
+    if niveau <= NIVEAU_ALERTE_PCT:
         peut_renvoyer = (
             derniere_alerte is None
             or datetime.now() - derniere_alerte > timedelta(hours=DELAI_MIN_ENTRE_ALERTES_HEURES)
@@ -68,20 +68,20 @@ def main():
         if not deja_en_alerte or peut_renvoyer:
             send_email(
                 "⚠️ Réservoir jardin bas",
-                "Le réservoir d'arrosage est bas (distance mesurée : {:.0f} cm, "
-                "seuil d'alerte : {} cm). Pense à le remplir.".format(distance, DISTANCE_ALERTE_CM)
+                "Le réservoir d'arrosage est bas (niveau mesuré : {:.0f}%, "
+                "seuil d'alerte : {}%). Pense à le remplir.".format(niveau, NIVEAU_ALERTE_PCT)
             )
             cursor.execute(
                 "UPDATE alertes SET DerniereAlerte=NOW(), EnAlerte=1 WHERE Id=1"
             )
             conn.commit()
 
-    elif distance <= DISTANCE_RETOUR_NORMAL_CM and deja_en_alerte:
+    elif niveau >= NIVEAU_RETOUR_NORMAL_PCT and deja_en_alerte:
         # Le réservoir a été rempli : on désarme l'alerte, un email de
         # retour à la normale n'est pas indispensable mais c'est agréable
         send_email(
             "✅ Réservoir jardin rempli",
-            "Le niveau du réservoir est revenu à la normale (distance mesurée : {:.0f} cm).".format(distance)
+            "Le niveau du réservoir est revenu à la normale (niveau mesuré : {:.0f}%).".format(niveau)
         )
         cursor.execute("UPDATE alertes SET EnAlerte=0 WHERE Id=1")
         conn.commit()

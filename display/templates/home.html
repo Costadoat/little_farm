@@ -22,7 +22,7 @@
   </div>
   <div class="metric-card">
     <i class="fas fa-water"></i>
-    <span class="metric-value">{{ "%.0f"|format(dernieres['remplissage_reservoir']) }} cm</span>
+    <span class="metric-value">{{ "%.0f"|format(dernieres['remplissage_reservoir']) }}%</span>
     <span class="metric-label">Niveau réservoir</span>
   </div>
   <div class="metric-card">
@@ -256,6 +256,13 @@
             day: 'DD',
             hour: 'dd LLL T'
           }
+        }
+      },
+      y: {
+        min: 0,
+        max: 100,
+        ticks: {
+          callback: function(value) { return value + '%'; }
         }
       }
     }

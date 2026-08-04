@@ -6,8 +6,8 @@
 // ---------------------------------------------------------------
 //  parametrage des pins carte (byte suffit : valeurs 0-19 max)
 // ---------------------------------------------------------------
-const byte trigPin = 10;
-const byte echoPin = 11;
+const byte trigPin = 11;
+const byte echoPin = 10;
 const byte dhtpin = 4;
 const byte relay_led_pin = 13;
 const byte relay_pin = 12;
@@ -37,11 +37,25 @@ DHT dht(dhtpin, DHT22);
 unsigned long duree; // durée de l'echo (pulseIn renvoie un unsigned long)
 
 // ---------------------------------------------------------------
+//  configuration du capteur ultrason / réservoir
+// ---------------------------------------------------------------
+// Distance mesurée (cm) quand le réservoir est plein / vide.
+// Adapter ces deux valeurs selon la géométrie réelle du réservoir.
+const float RESERVOIR_DIST_PLEIN_CM = 26.0;  // 100 %
+const float RESERVOIR_DIST_VIDE_CM  = 54.0;  //   0 %
+
+// ---------------------------------------------------------------
 //  configuration des variables
 // ---------------------------------------------------------------
-int lastrecord;                    // temps du dernier enregistrement (cumul TimeNow(), doit rester int)
+// IMPORTANT : sur Arduino Mega, "int" fait 16 bits (-32768 a 32767).
+// TimeNow() calcule un cumul (annee/mois/jour/heure/min/sec) qui atteint
+// facilement plusieurs centaines de millions -> il DOIT etre en "long"
+// (32 bits), ainsi que tout ce qui stocke son resultat, sous peine de
+// depassement silencieux qui rend la temporisation (deltarecord/deltapoll)
+// totalement imprevisible.
+long lastrecord;                   // temps du dernier enregistrement (cumul TimeNow())
 int deltarecord = 5 * 60;          // durée entre deux enregistrements en secondes
-int lastpoll;                      // temps du dernier sondage de commande
+long lastpoll;                     // temps du dernier sondage de commande
 byte deltapoll = 10;               // durée entre deux sondages en secondes (< 255, byte suffit)
 unsigned int wateringduration = 2 * 60;    // durée par défaut d'un arrosage en secondes
 unsigned int maxwateringduration = 10 * 60; // sécurité absolue : jamais plus de 10 min d'arrosage
@@ -66,6 +80,7 @@ byte TerreNoird;  // idem
 float AirHumidite;
 float AirTemperature;
 float Distance;
+byte NiveauEauPct; // 0-100 %, tient dans un byte
 byte heures, minutes, secondes, jour, mois, annees; // la lib DS3231 renvoie deja des byte
 
 // buffers reutilises, taille au plus juste des messages reellement envoyes/recus
@@ -98,6 +113,19 @@ bool getToken(const char* data, char sep, byte index, char* out, byte outSize)
     }
     out[0] = '\0';
     return false;
+}
+
+// Convertit une distance mesurée (cm) en pourcentage de remplissage,
+// avec RESERVOIR_DIST_PLEIN_CM -> 100% et RESERVOIR_DIST_VIDE_CM -> 0%.
+// Le résultat est toujours borné entre 0 et 100, même si la mesure
+// ultrason est bruitée ou hors plage (écho manqué, obstacle, etc.).
+byte distanceToPourcent(float distCm)
+{
+    float pct = (RESERVOIR_DIST_VIDE_CM - distCm)
+                / (RESERVOIR_DIST_VIDE_CM - RESERVOIR_DIST_PLEIN_CM) * 100.0;
+    if (pct < 0.0)   pct = 0.0;
+    if (pct > 100.0) pct = 100.0;
+    return (byte)(pct + 0.5); // arrondi au plus proche
 }
 
 // Applique une nouvelle heure d'arrosage programme sur l'alarme du RTC,
@@ -243,7 +271,7 @@ void set_param(char* input)
     }
 }
 
-int TimeNow()
+long TimeNow()
 {
     heures = rtc.getHour(h12Flag, pmFlag);
     minutes = rtc.getMinute();
@@ -251,7 +279,11 @@ int TimeNow()
     jour = rtc.getDate();
     mois = rtc.getMonth(century);
     annees = rtc.getYear();
-    return ((((12 * (int)annees + mois) * 30 + jour) * 24 + heures) * 60 + minutes) * 60 + secondes;
+    // Le "12L" force toute la chaine de calculs en arithmetique 32 bits
+    // (long) des la premiere operation, sinon les multiplications
+    // intermediaires debordent silencieusement en 16 bits (int sur Mega)
+    // avant meme d'atteindre le "return".
+    return ((((12L * annees + mois) * 30 + jour) * 24 + heures) * 60 + minutes) * 60 + secondes;
 }
 
 void showTime()
@@ -276,8 +308,11 @@ void showData()
     Serial.print(F("AirTemperature=")); Serial.print(AirTemperature);
     Serial.print(F(", AirHumidite=")); Serial.print(AirHumidite);
     Serial.print(F(", Distance=")); Serial.print(Distance);
+    Serial.print(F(", NiveauEau=")); Serial.print(NiveauEauPct); Serial.print(F("%"));
     Serial.print(F(", TerreNoir=")); Serial.print(TerreNoir);
-    Serial.print(F(", TerreBlanc=")); Serial.println(TerreBlanc);
+    Serial.print(F(", TerreBlanc=")); Serial.print(TerreBlanc);
+    Serial.print(F(", TerreNoird=")); Serial.print(TerreNoird);
+    Serial.print(F(", TerreBlancd=")); Serial.println(TerreBlancd);
 }
 
 void setup() {
@@ -345,6 +380,7 @@ void loop() {
     digitalWrite(trigPin, LOW);
     duree = pulseIn(echoPin, HIGH);
     Distance = duree * 0.034 / 2;
+    NiveauEauPct = distanceToPourcent(Distance);
 
     // Arrosage programme : declenchement normal via l'interruption materielle du RTC
     if (tick) {
@@ -392,8 +428,8 @@ void loop() {
         dtostrf(AirHumidite, 4, 2, humStr);
         dtostrf(Distance, 4, 2, distStr);
         snprintf(outBuf, sizeof(outBuf),
-                 "api_key=%s&Heure=0&Temp=%s&Hum=%s&Dist=%s&TNoir=%d&TBlanc=%d",
-                 API_KEY, tempStr, humStr, distStr, TerreNoir, TerreBlanc);
+                 "api_key=%s&Heure=0&Temp=%s&Hum=%s&Dist=%s&Niveau=%d&TNoir=%d&TBlanc=%d",
+                 API_KEY, tempStr, humStr, distStr, NiveauEauPct, TerreNoir, TerreBlanc);
         SerialESP8266.println(outBuf);
         Serial.println(F("Data Sent"));
         lastrecord = TimeNow();
@@ -406,7 +442,7 @@ void loop() {
     }
 
     if (Serial.available() > 0) {
-        char incoming[8];
+        char incoming[12];
         byte n = Serial.readBytesUntil('\n', incoming, sizeof(incoming) - 1);
         incoming[n] = '\0';
         while (n > 0 && (incoming[n-1] == '\r')) { incoming[--n] = '\0'; }
@@ -417,13 +453,16 @@ void loop() {
             dtostrf(AirHumidite, 4, 2, humStr);
             dtostrf(Distance, 4, 2, distStr);
             snprintf(outBuf, sizeof(outBuf),
-                     "api_key=%s&Heure=1&Temp=%s&Hum=%s&Dist=%s&TNoir=%d&TBlanc=%d",
-                     API_KEY, tempStr, humStr, distStr, TerreNoir, TerreBlanc);
+                     "api_key=%s&Heure=1&Temp=%s&Hum=%s&Dist=%s&Niveau=%d&TNoir=%d&TBlanc=%d",
+                     API_KEY, tempStr, humStr, distStr, NiveauEauPct, TerreNoir, TerreBlanc);
             SerialESP8266.println(outBuf);
             Serial.println(F("Demande Réglage heure"));
         }
         else if (strcmp(incoming, "on") == 0) {
             startWatering(wateringduration, "test_serie");
+        }
+        else if (strcmp(incoming, "getdata") == 0) {
+            showData();
         }
     }
 
