@@ -357,3 +357,34 @@ body.loggedin {
 	color: #fff;
 	font-weight: bold;
 }
+
+/* ===================== Ajouts : température intérieure + système extérieur ===================== */
+
+/* Bandeau neutre quand le système extérieur est débranché (pas une erreur) */
+.content > p.info, .content > div.info {
+	background-color: #dfe6ee;
+}
+
+.metric-card.stale {
+	border-left: 5px solid #ee925d;
+}
+
+.metric-card .metric-warning {
+	font-size: 12px;
+	color: #c0652e;
+	margin-top: 6px;
+}
+
+.metric-card .metric-warning i {
+	font-size: 12px;
+	color: #c0652e;
+	margin: 0 3px 0 0;
+}
+
+.water-card.off {
+	border-left: 5px solid #b5bac3;
+}
+
+.water-card.off .water-card-text i {
+	color: #b5bac3;
+}

@@ -1,4 +1,4 @@
 #!/bin/bash
-source /django/jardin/myenv/bin/activate
+source /sites/jardin/myenv/bin/activate
 gunicorn --workers 3 --bind unix:jardin_display.sock -m 007 wsgi
 deactivate

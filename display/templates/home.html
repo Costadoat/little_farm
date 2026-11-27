@@ -2,37 +2,72 @@
 
 {% block title %}Jardin Erard{% endblock %}
 
+{# Affiche une valeur numérique formatée, ou un tiret si la mesure manque #}
+{% macro val(v, fmt) %}{% if v is not none %}{{ fmt|format(v) }}{% else %}—{% endif %}{% endmacro %}
+
 {% block content %}
 <h2>Mesures</h2>
+{% if exterieur_actif %}
 <p class='{{class2}}'> Nous sommes le {{ date_aujourdhui_fr }}, il est
-{{maintenant.strftime('%H:%M') }}{% if last_record %} et le dernier enregistrement date de
-{{duree_depuis_dernier_enregistrement_fr}} ({{last_record_display}}){% else %} — aucune donnée reçue pour le moment{% endif %}. </p>
+{{maintenant.strftime('%H:%M') }}{% if last_record %} et le dernier enregistrement du jardin date de
+{{duree_depuis_dernier_enregistrement_fr}} ({{last_record_display}}){% else %} — aucune donnée reçue du jardin pour le moment{% endif %}. </p>
+{% else %}
+<p class='info'> Nous sommes le {{ date_aujourdhui_fr }}, il est {{maintenant.strftime('%H:%M') }}.
+Le système extérieur est débranché : les mesures du jardin et l'arrosage sont masqués. </p>
+{% endif %}
 
+<h3>Appartement</h3>
+<div class="cards-grid">
+  <div class="metric-card {{ '' if interieur_ok else 'stale' }}">
+    <i class="fas fa-home"></i>
+    {% if interieur_dernier %}
+      <span class="metric-value">{{ val(interieur_dernier['Temperature'], '%.1f') }}°C</span>
+      <span class="metric-label">Température intérieure</span>
+      {% if not interieur_ok %}
+        <span class="metric-warning"><i class="fas fa-exclamation-triangle"></i> Dernière mesure il y a {{ interieur_age_fr }}</span>
+      {% endif %}
+    {% else %}
+      <span class="metric-value">—</span>
+      <span class="metric-label">Température intérieure</span>
+      <span class="metric-warning">Aucune mesure reçue de la sonde</span>
+    {% endif %}
+  </div>
+  {% if interieur_minmax and interieur_minmax['tmin'] is not none %}
+  <div class="metric-card">
+    <i class="fas fa-arrows-alt-v"></i>
+    <span class="metric-value">{{ val(interieur_minmax['tmin'], '%.1f') }} / {{ val(interieur_minmax['tmax'], '%.1f') }}°C</span>
+    <span class="metric-label">Min / max sur 24h</span>
+  </div>
+  {% endif %}
+</div>
+
+{% if exterieur_actif %}
+<h3>Jardin</h3>
 {% if dernieres %}
 <div class="cards-grid">
   <div class="metric-card">
     <i class="fas fa-thermometer-half"></i>
-    <span class="metric-value">{{ "%.1f"|format(dernieres['Temperature']) }}°C</span>
+    <span class="metric-value">{{ val(dernieres['Temperature'], '%.1f') }}°C</span>
     <span class="metric-label">Température air</span>
   </div>
   <div class="metric-card">
     <i class="fas fa-tint"></i>
-    <span class="metric-value">{{ "%.0f"|format(dernieres['Humidite']) }}%</span>
+    <span class="metric-value">{{ val(dernieres['Humidite'], '%.0f') }}%</span>
     <span class="metric-label">Humidité air</span>
   </div>
   <div class="metric-card">
     <i class="fas fa-water"></i>
-    <span class="metric-value">{{ "%.0f"|format(dernieres['remplissage_reservoir']) }}%</span>
+    <span class="metric-value">{{ val(dernieres['remplissage_reservoir'], '%.0f') }}%</span>
     <span class="metric-label">Niveau réservoir</span>
   </div>
   <div class="metric-card">
     <i class="fas fa-seedling"></i>
-    <span class="metric-value">{{ dernieres['hygrometrie_terre_b'] }}</span>
+    <span class="metric-value">{{ dernieres['hygrometrie_terre_b'] if dernieres['hygrometrie_terre_b'] is not none else '—' }}</span>
     <span class="metric-label">Terre (blanc)</span>
   </div>
   <div class="metric-card">
     <i class="fas fa-seedling"></i>
-    <span class="metric-value">{{ dernieres['hygrometrie_terre_n'] }}</span>
+    <span class="metric-value">{{ dernieres['hygrometrie_terre_n'] if dernieres['hygrometrie_terre_n'] is not none else '—' }}</span>
     <span class="metric-label">Terre (noir)</span>
   </div>
 </div>
@@ -70,13 +105,54 @@
     <i class="fas fa-clock"></i>
     <div>
       <strong>Arrosage programmé</strong>
-      <p>Déclenché automatiquement chaque jour à cette heure.</p>
+      {% if arrosage_auto_actif %}
+        <p>Déclenché automatiquement chaque jour à l'heure et pour la durée indiquées.</p>
+      {% else %}
+        <p><span class="badge-pause">En pause</span> — l'arrosage automatique ne se déclenchera pas tant qu'il n'est pas réactivé.</p>
+      {% endif %}
     </div>
   </div>
   <form method="POST" class="water-card-form">
     <input type="time" name="heure_prog" value="{{ heure_prog }}" required>
+    <select name="duree_prog">
+      {% for opt in duree_prog_options %}
+      <option value="{{ opt }}" {{ 'selected' if opt == duree_prog else '' }}>
+        {{ opt // 60 }} min{{ ' ' ~ (opt % 60) ~ 's' if opt % 60 else '' }}
+      </option>
+      {% endfor %}
+    </select>
     <button type="submit" name="bouton_programmer" class="btn-water">
       <i class="fas fa-check"></i> Enregistrer
+    </button>
+    <button type="submit" name="bouton_toggle_auto" class="btn-stop">
+      {% if arrosage_auto_actif %}
+        <i class="fas fa-pause"></i> Mettre en pause
+      {% else %}
+        <i class="fas fa-play"></i> Réactiver
+      {% endif %}
+    </button>
+  </form>
+</div>
+
+<div class="water-card">
+  <div class="water-card-text">
+    <i class="fas fa-envelope"></i>
+    <div>
+      <strong>Alerte email</strong>
+      {% if alerte_email_active %}
+        <p>Un email est envoyé si aucune donnée n'a été reçue depuis plus de 24h.</p>
+      {% else %}
+        <p><span class="badge-pause">En pause</span> — aucun email ne sera envoyé.</p>
+      {% endif %}
+    </div>
+  </div>
+  <form method="POST" class="water-card-form">
+    <button type="submit" name="bouton_toggle_alerte" class="btn-stop">
+      {% if alerte_email_active %}
+        <i class="fas fa-bell-slash"></i> Mettre en pause
+      {% else %}
+        <i class="fas fa-bell"></i> Réactiver
+      {% endif %}
     </button>
   </form>
 </div>
@@ -104,6 +180,30 @@
   </table>
 </div>
 {% endif %}
+{% endif %}{# fin exterieur_actif #}
+
+<div class="water-card {{ '' if exterieur_actif else 'off' }}">
+  <div class="water-card-text">
+    <i class="fas fa-plug"></i>
+    <div>
+      <strong>Système extérieur</strong>
+      {% if exterieur_actif %}
+        <p>Branché. Avant de débrancher l'ESP (hiver, travaux…), clique sur « Débrancher » : le site n'affichera plus d'erreur et les emails d'alerte du jardin ne partiront plus.</p>
+      {% else %}
+        <p><span class="badge-pause">Débranché</span> — partie jardin masquée, alertes du jardin suspendues. Les données déjà enregistrées sont conservées.</p>
+      {% endif %}
+    </div>
+  </div>
+  <form method="POST" class="water-card-form">
+    <button type="submit" name="bouton_toggle_exterieur" class="btn-stop">
+      {% if exterieur_actif %}
+        <i class="fas fa-power-off"></i> Débrancher
+      {% else %}
+        <i class="fas fa-plug"></i> Rebrancher
+      {% endif %}
+    </button>
+  </form>
+</div>
 
 <h3>Historique des mesures</h3>
 <div class="range-nav">
@@ -113,15 +213,34 @@
 </div>
 
 <div class="chart-container" style="position: relative;">
+  <canvas id="canvas_interieur"></canvas>
+</div>
+{% if exterieur_actif %}
+<div class="chart-container" style="position: relative;">
   <canvas id="canvas"></canvas>
 </div>
-
 <div class="chart-container" style="position: relative;">
   <canvas id="canvas2"></canvas>
 </div>
 <div class="chart-container" style="position: relative;">
   <canvas id="canvas3"></canvas>
 </div>
+{% endif %}
+
+{% macro chart_datasets(datasets) %}[{% for dataset in datasets %}
+      {
+        label: "{{dataset.nom}}",
+        backgroundColor: "{{dataset.backgroundColor}}",
+        borderColor: "{{dataset.borderColor}}",
+        pointRadius: 0,
+        spanGaps: false,
+        data: [{% for value1,value2 in dataset.values %}
+          {x: "{{value1.strftime('%Y-%m-%dT%H:%M:%SZ') }}", y: {{ value2|js_num }}},{% endfor %}
+        ],
+        fill: false,
+      },{% endfor %}
+    ]{% endmacro %}
+
 <script>
   var chartUnit = "{{ chart_unit }}";
   var arrosageInstants = [{% for a in arrosage_instants %}"{{ a.strftime('%Y-%m-%dT%H:%M:%SZ') }}",{% endfor %}];
@@ -154,31 +273,12 @@
     }
   };
 
-  var config = {
-    type: 'line',
-    data: {
-      datasets: [{% for dataset in datasets_temperature %}
-      {
-        label: "{{dataset.nom}}",
-        backgroundColor: "{{dataset.backgroundColor}}",
-        borderColor: "{{dataset.borderColor}}",
-	pointRadius: "0",
-        data: [{% for value1,value2 in dataset.values %}
-          {x: "{{value1.strftime('%Y-%m-%dT%H:%M:%SZ') }}",
-          y: {{value2}}
-          },
-          {% endfor %}
-        ],
-        fill: false,
-      },
-      {% endfor %}
-    ]
-    },
-    options: {
-      scales: {
-        x: {
-          type: 'time',
-          time: {
+  // Construit la configuration commune a tous les graphes
+  function makeConfig(datasets, yScale, plugins) {
+    var scales = {
+      x: {
+        type: 'time',
+        time: {
           unit: chartUnit,
           displayFormats: {
             day: 'DD',
@@ -186,96 +286,36 @@
           }
         }
       }
-    }
-    }
-  };
-  config.plugins = [arrosageLinesPlugin];
-  var config2 = {
-    type: 'line',
-    data: {
-      datasets: [{% for dataset in datasets_hygrometrie %}
-      {
-        label: "{{dataset.nom}}",
-        backgroundColor: "{{dataset.backgroundColor}}",
-        borderColor: "{{dataset.borderColor}}",
-	pointRadius: "0",
-        data: [{% for value1,value2 in dataset.values %}
-          {x: "{{value1.strftime('%Y-%m-%dT%H:%M:%SZ') }}",
-          y: {{value2}}
-          },
-          {% endfor %}
-        ],
-        fill: false,
-      },
-      {% endfor %}
-    ]
-    },
-    options: {
-      scales: {
-        x: {
-          type: 'time',
-          time: {
-          unit: chartUnit,
-          displayFormats: {
-            day: 'DD',
-            hour: 'dd LLL T'
-          }
-        }
-      }
-    }
-    }
-  };
-  config2.plugins = [arrosageLinesPlugin];
-  var config3 = {
-    type: 'line',
-    data: {
-      datasets: [{% for dataset in datasets_niveau %}
-      {
-        label: "{{dataset.nom}}",
-        backgroundColor: "{{dataset.backgroundColor}}",
-        borderColor: "{{dataset.borderColor}}",
-	pointRadius: "0",
-        data: [{% for value1,value2 in dataset.values %}
-          {x: "{{value1.strftime('%Y-%m-%dT%H:%M:%SZ') }}",
-          y: {{value2}}
-          },
-          {% endfor %}
-        ],
-        fill: false,
-      },
-      {% endfor %}
-    ]
-    },
-    options: {
-      scales: {
-        x: {
-          type: 'time',
-          time: {
-          unit: chartUnit,
-          displayFormats: {
-            day: 'DD',
-            hour: 'dd LLL T'
-          }
-        }
-      },
-      y: {
-        min: 0,
-        max: 100,
-        ticks: {
-          callback: function(value) { return value + '%'; }
-        }
-      }
-    }
-    }
-  };
-  config3.plugins = [arrosageLinesPlugin];
+    };
+    if (yScale) scales.y = yScale;
+    return {
+      type: 'line',
+      data: { datasets: datasets },
+      options: { scales: scales },
+      plugins: plugins || []
+    };
+  }
+
+  var configInterieur = makeConfig({{ chart_datasets(datasets_interieur) }}, {
+    ticks: { callback: function(value) { return value + '°C'; } }
+  });
+{% if exterieur_actif %}
+  var config = makeConfig({{ chart_datasets(datasets_temperature) }}, null, [arrosageLinesPlugin]);
+  var config2 = makeConfig({{ chart_datasets(datasets_hygrometrie) }}, null, [arrosageLinesPlugin]);
+  var config3 = makeConfig({{ chart_datasets(datasets_niveau) }}, {
+    min: 0,
+    max: 100,
+    ticks: { callback: function(value) { return value + '%'; } }
+  }, [arrosageLinesPlugin]);
+{% endif %}
+
   window.onload = function() {
-    var ctx = document.getElementById('canvas').getContext('2d');
-    window.myLine = new Chart(ctx, config);
-    var ctx = document.getElementById('canvas2').getContext('2d');
-    window.myLine = new Chart(ctx, config2);
-    var ctx = document.getElementById('canvas3').getContext('2d');
-    window.myLine = new Chart(ctx, config3);
+    new Chart(document.getElementById('canvas_interieur').getContext('2d'), configInterieur);
+{% if exterieur_actif %}
+    new Chart(document.getElementById('canvas').getContext('2d'), config);
+    new Chart(document.getElementById('canvas2').getContext('2d'), config2);
+    new Chart(document.getElementById('canvas3').getContext('2d'), config3);
+{% endif %}
   };
 
   // Rafraîchissement automatique toutes les 30s pour suivre l'état

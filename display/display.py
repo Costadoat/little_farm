@@ -4,12 +4,18 @@ from flask_mysqldb import MySQL
 import MySQLdb.cursors
 import re
 from time import sleep
+import time
 from datetime import datetime, timedelta, timezone
 import locale
 
 start_time = datetime.now() - timedelta(days=2)
 
 from local_settings import DATABASE
+try:
+    from local_settings import SECRET_KEY
+except ImportError:
+    import os
+    SECRET_KEY = os.environ['JARDIN_SECRET_KEY']
 
 # ---- Formatage en français, sans dépendre de la locale du serveur ---------
 JOURS_FR = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche']
@@ -51,7 +57,7 @@ def format_duration_fr(total_seconds):
 application = Flask(__name__)
 
 # Change this to your secret key (can be anything, it's for extra protection)
-application.secret_key = 'zffuiaozeguzbeunf13znfepZU11213333BV'
+application.secret_key = SECRET_KEY
 
 # ---- HTTPS (voir nginx_jardin.conf pour la partie reverse proxy) ---------
 # Une fois le certificat en place devant gunicorn, ces réglages évitent que
@@ -71,6 +77,14 @@ application.config['MYSQL_DB'] = DATABASE['BASE']
 
 # Intialize MySQL
 mysql = MySQL(application)
+
+
+@application.template_filter('js_num')
+def js_num(value):
+    """Valeur numérique utilisable telle quelle dans le JavaScript des
+    graphes : une mesure manquante (NULL en base) devient 'null' au lieu de
+    'None', qui ferait planter tout le script de la page."""
+    return 'null' if value is None else value
 
 
 @application.before_request
@@ -167,6 +181,52 @@ RANGE_OPTIONS = {
     'semaine': {'label': 'Dernière semaine', 'interval': '7 DAY',  'limit': 2500, 'unit': 'day',    'bucket_seconds': 7200},  # 2h -> ~84 points
 }
 
+# Durées proposées pour l'arrosage programmé (secondes)
+DUREE_PROG_OPTIONS = [60, 120, 300, 600]
+
+
+def fetch_series(cursor, table, colonnes, range_conf):
+    """Mesures de `table` sur la plage demandée, moyennées par tranche de
+    temps si la plage le prévoit. Renvoie des lignes avec une clé 'Temps'.
+    `table` et `colonnes` sont des constantes du code, jamais issues de
+    l'entrée utilisateur."""
+    if range_conf['bucket_seconds']:
+        bucket = range_conf['bucket_seconds']
+        moyennes = ", ".join("AVG({0}) AS {0}".format(c) for c in colonnes)
+        # Alias distinct de la colonne Temps : avec "GROUP BY Temps", MySQL
+        # regroupe sur la colonne brute et non sur la tranche calculée, ce
+        # qui annulait la moyenne.
+        cursor.execute(
+            "SELECT FROM_UNIXTIME(FLOOR(UNIX_TIMESTAMP(Temps)/%s)*%s) AS Tranche, " + moyennes +
+            " FROM " + table + " WHERE Temps >= (NOW() - INTERVAL " + range_conf['interval'] + ")"
+            " GROUP BY Tranche ORDER BY Tranche",
+            (bucket, bucket)
+        )
+        rows = cursor.fetchall()
+        for r in rows:
+            r['Temps'] = r.pop('Tranche')
+        return rows
+    cursor.execute(
+        "SELECT * FROM (SELECT * FROM " + table + " WHERE Temps >= (NOW() - INTERVAL "
+        + range_conf['interval'] +
+        ") ORDER BY `Id` DESC LIMIT %s) t1 ORDER BY t1.Id",
+        (range_conf['limit'],)
+    )
+    return list(cursor.fetchall())
+
+
+def get_reglage(cursor, id_, default):
+    cursor.execute("SELECT valeur FROM reglages WHERE Id=%s", (id_,))
+    row = cursor.fetchone()
+    return row['valeur'] if row and row['valeur'] is not None else default
+
+
+def toggle_reglage(cursor, id_, default_actif=1):
+    """Bascule un réglage 0/1 (actif/en pause) et le persiste."""
+    actif = get_reglage(cursor, id_, default_actif)
+    nouvel_etat = 0 if actif == 1 else 1
+    cursor.execute('UPDATE reglages SET valeur=%s WHERE Id=%s', (nouvel_etat, id_))
+
 
 @application.route('/', methods=['GET', 'POST'])
 def home():
@@ -186,9 +246,12 @@ def home():
             elif 'bouton_stop' in request.form:
                 cursor.execute('UPDATE reglages SET valeur=0 WHERE Id=1')
                 mysql.connection.commit()
-            # Formulaire "Programmation" : change l'heure de l'arrosage automatique
+            # Formulaire "Programmation" : change l'heure ET la durée de
+            # l'arrosage automatique
             elif 'bouton_programmer' in request.form:
                 heure_prog = request.form.get('heure_prog', '')
+                duree_prog = request.form.get('duree_prog', '120')
+                duree_prog = duree_prog if duree_prog.isdigit() else '120'
                 # attendu au format HH:MM (input type="time")
                 if re.match(r'^\d{1,2}:\d{2}$', heure_prog):
                     h, m = heure_prog.split(':')
@@ -196,7 +259,27 @@ def home():
                     if 0 <= h <= 23 and 0 <= m <= 59:
                         cursor.execute('UPDATE reglages SET valeur=%s WHERE Id=4', (h,))
                         cursor.execute('UPDATE reglages SET valeur=%s WHERE Id=5', (m,))
+                        cursor.execute('UPDATE reglages SET valeur=%s WHERE Id=6', (duree_prog,))
                         mysql.connection.commit()
+            # Pause / réactivation de l'arrosage automatique programmé
+            elif 'bouton_toggle_auto' in request.form:
+                toggle_reglage(cursor, 7, default_actif=1)
+                mysql.connection.commit()
+            # Pause / réactivation de l'alerte email "pas de donnée depuis 24h"
+            elif 'bouton_toggle_alerte' in request.form:
+                toggle_reglage(cursor, 8, default_actif=1)
+                mysql.connection.commit()
+            # Système extérieur (ESP8266) branché / débranché
+            elif 'bouton_toggle_exterieur' in request.form:
+                # La ligne Id=10 est créée par schema_updates.sql
+                toggle_reglage(cursor, 10, default_actif=1)
+                if get_reglage(cursor, 10, 1) == 1:
+                    # On vient de le rebrancher : la dernière mesure date
+                    # forcément de longtemps. On note un "email déjà envoyé
+                    # maintenant" (Id=9) pour laisser 12h à l'ESP avant que
+                    # alert_check.py ne signale l'absence de données.
+                    cursor.execute('UPDATE reglages SET valeur=%s WHERE Id=9', (int(time.time()),))
+                mysql.connection.commit()
 
             # Pattern Post/Redirect/Get : on redirige vers la page en GET après
             # traitement du formulaire, pour que le rafraîchissement automatique
@@ -208,110 +291,131 @@ def home():
             selected_range = 'jour'
         range_conf = RANGE_OPTIONS[selected_range]
 
-        Temps = []
-        Humidite_values = []
-        Temperature_values = []
-        Hygrometrie_terre_blanc_values = []
-        Hygrometrie_terre_noir_values = []
-        Remplissage_reservoir_values = []
-
-        if range_conf['bucket_seconds']:
-            # Moyenne par tranche de temps : beaucoup plus léger à charger/
-            # afficher qu'une mesure brute toutes les 5 minutes.
-            bucket = range_conf['bucket_seconds']
-            cursor.execute(
-                "SELECT FROM_UNIXTIME(FLOOR(UNIX_TIMESTAMP(Temps)/%s)*%s) AS Temps, "
-                "AVG(Humidite) AS Humidite, AVG(Temperature) AS Temperature, "
-                "AVG(hygrometrie_terre_b) AS hygrometrie_terre_b, "
-                "AVG(hygrometrie_terre_n) AS hygrometrie_terre_n, "
-                "AVG(remplissage_reservoir) AS remplissage_reservoir "
-                "FROM sensors WHERE Temps >= (NOW() - INTERVAL " + range_conf['interval'] + ") "
-                "GROUP BY Temps ORDER BY Temps",
-                (bucket, bucket)
-            )
-        else:
-            cursor.execute(
-                "SELECT * FROM (SELECT * FROM sensors WHERE Temps >= (NOW() - INTERVAL "
-                + range_conf['interval'] +
-                ") ORDER BY `Id` DESC LIMIT %s) t1 ORDER BY t1.Id",
-                (range_conf['limit'],)
-            )
-
-        myresult = cursor.fetchall()
-        for x in myresult:
-            temps = x['Temps'] - timedelta(hours=2)
-            Temps.append(temps)
-            Humidite_values.append([temps, x['Humidite']])
-            Temperature_values.append([temps, x['Temperature']])
-            Hygrometrie_terre_blanc_values.append([temps, x['hygrometrie_terre_b']])
-            Hygrometrie_terre_noir_values.append([temps, x['hygrometrie_terre_n']])
-            Remplissage_reservoir_values.append([temps, x['remplissage_reservoir']])
-
-        # Instants d'arrosage sur la même plage que les mesures affichées,
-        # pour les superposer aux graphes sous forme de barres verticales.
-        cursor.execute(
-            "SELECT Debut FROM arrosages WHERE Debut >= (NOW() - INTERVAL "
-            + range_conf['interval'] + ") ORDER BY Debut"
-        )
-        arrosage_instants = [row['Debut'] - timedelta(hours=2) for row in cursor.fetchall()]
-
-        cursor.execute("SELECT valeur FROM reglages WHERE Id=1")
-        reglage_row = cursor.fetchone()
-        arrosage_demande = bool(reglage_row and reglage_row['valeur'] == 1)
-
-        cursor.execute("SELECT Debut, Duree, Source FROM arrosages ORDER BY Id DESC LIMIT 10")
-        historique_arrosages = cursor.fetchall()
-
-        cursor.execute("SELECT valeur FROM reglages WHERE Id=4")
-        heure_row = cursor.fetchone()
-        cursor.execute("SELECT valeur FROM reglages WHERE Id=5")
-        minute_row = cursor.fetchone()
-        heure_prog = '{:02d}:{:02d}'.format(
-            heure_row['valeur'] if heure_row else 20,
-            minute_row['valeur'] if minute_row else 0,
-        )
-
-        cursor.execute("SELECT Temps FROM sensors ORDER BY Id DESC LIMIT 1")
-        records = cursor.fetchone()
-        last_record = records['Temps'] if records else None
-
-        line_labels = Temps
-        Temperature = data("rgba(186,125,125,1)", "rgba(186,125,125,1)", 'Température', Temperature_values)
-        Humidite = data("rgba(151,187,205,1)", "rgba(151,187,205,1)", 'Humidité', Humidite_values)
-        Hygrometrie_terre_blanc = data("rgba(153,204,255,1)", "rgba(153,204,255,1)", 'Hygrométrie terre (blanc)', Hygrometrie_terre_blanc_values)
-        Hygrometrie_terre_noir = data("rgba(0,128,255,1)", "rgba(0,128,255,1)", 'Hygrométrie terre (noir)', Hygrometrie_terre_noir_values)
-        Niveau_eau = data("rgba(245,75,39,1)", "rgba(245,75,39,1)", "Niveau eau", Remplissage_reservoir_values)
-        line_values_1 = [Temperature, Humidite]
-        line_values_2 = [Hygrometrie_terre_blanc, Hygrometrie_terre_noir]
-        line_values_3 = [Niveau_eau]
-
-        dernieres = myresult[-1] if myresult else None
-
-        if last_record:
-            delta_last_record = int((datetime.now() - last_record).total_seconds())
-        else:
-            delta_last_record = None
-
-        if delta_last_record is None or delta_last_record > 600:
-            class2 = 'error'
-        else:
-            class2 = 'ok'
-
+        exterieur_actif = bool(get_reglage(cursor, 10, 1) == 1)
         maintenant = datetime.now()
         date_aujourdhui_fr = format_date_fr(maintenant)
 
-        if delta_last_record is not None:
-            duree_depuis_dernier_enregistrement_fr = format_duration_fr(delta_last_record)
-            if delta_last_record > 86400:
-                # Décalage de plus de 24h : le jour est plus informatif que l'heure seule
-                last_record_display = "{} à {}".format(
-                    format_date_fr(last_record), last_record.strftime('%H:%M')
-                )
-            else:
-                last_record_display = last_record.strftime('%H:%M')
+        # ---------------- Température intérieure (sonde DS18B20) ----------------
+        interieur_rows = fetch_series(cursor, 'temperature_interieure', ['Temperature'], range_conf)
+        Temperature_int_values = [[x['Temps'] - timedelta(hours=2), x['Temperature']] for x in interieur_rows]
+
+        cursor.execute("SELECT Temps, Temperature FROM temperature_interieure ORDER BY Id DESC LIMIT 1")
+        interieur_dernier = cursor.fetchone()
+        cursor.execute(
+            "SELECT MIN(Temperature) AS tmin, MAX(Temperature) AS tmax "
+            "FROM temperature_interieure WHERE Temps >= (NOW() - INTERVAL 1 DAY)"
+        )
+        interieur_minmax = cursor.fetchone()
+        if interieur_dernier:
+            interieur_age = int((maintenant - interieur_dernier['Temps']).total_seconds())
+            interieur_age_fr = format_duration_fr(interieur_age)
+            # cron toutes les 5 min : au-delà de 15 min, la sonde ou le script a un souci
+            interieur_ok = interieur_age <= 900
         else:
-            duree_depuis_dernier_enregistrement_fr = None
-            last_record_display = None
+            interieur_age_fr = None
+            interieur_ok = False
+        datasets_interieur = [
+            data("rgba(230,145,56,1)", "rgba(230,145,56,1)", 'Température intérieure', Temperature_int_values)
+        ]
+
+        # ---------------- Système extérieur (ESP8266) ----------------
+        # Valeurs par défaut quand il est débranché : rien n'est interrogé et
+        # rien n'est signalé comme une erreur.
+        line_labels = []
+        line_values_1 = line_values_2 = line_values_3 = []
+        arrosage_instants = []
+        arrosage_demande = False
+        historique_arrosages = []
+        heure_prog = '20:00'
+        duree_prog = 120
+        arrosage_auto_actif = True
+        alerte_email_active = True
+        last_record = None
+        dernieres = None
+        delta_last_record = None
+        duree_depuis_dernier_enregistrement_fr = None
+        last_record_display = None
+        class2 = 'info'
+
+        if exterieur_actif:
+            Temps = []
+            Humidite_values = []
+            Temperature_values = []
+            Hygrometrie_terre_blanc_values = []
+            Hygrometrie_terre_noir_values = []
+            Remplissage_reservoir_values = []
+
+            myresult = fetch_series(
+                cursor, 'sensors',
+                ['Humidite', 'Temperature', 'hygrometrie_terre_b', 'hygrometrie_terre_n', 'remplissage_reservoir'],
+                range_conf
+            )
+            for x in myresult:
+                temps = x['Temps'] - timedelta(hours=2)
+                Temps.append(temps)
+                Humidite_values.append([temps, x['Humidite']])
+                Temperature_values.append([temps, x['Temperature']])
+                Hygrometrie_terre_blanc_values.append([temps, x['hygrometrie_terre_b']])
+                Hygrometrie_terre_noir_values.append([temps, x['hygrometrie_terre_n']])
+                Remplissage_reservoir_values.append([temps, x['remplissage_reservoir']])
+
+            # Instants d'arrosage sur la même plage que les mesures affichées,
+            # pour les superposer aux graphes sous forme de barres verticales.
+            cursor.execute(
+                "SELECT Debut FROM arrosages WHERE Debut >= (NOW() - INTERVAL "
+                + range_conf['interval'] + ") ORDER BY Debut"
+            )
+            arrosage_instants = [row['Debut'] - timedelta(hours=2) for row in cursor.fetchall()]
+
+            cursor.execute("SELECT valeur FROM reglages WHERE Id=1")
+            reglage_row = cursor.fetchone()
+            arrosage_demande = bool(reglage_row and reglage_row['valeur'] == 1)
+
+            cursor.execute("SELECT Debut, Duree, Source FROM arrosages ORDER BY Id DESC LIMIT 10")
+            historique_arrosages = cursor.fetchall()
+
+            heure_prog = '{:02d}:{:02d}'.format(
+                int(get_reglage(cursor, 4, 20)),
+                int(get_reglage(cursor, 5, 0)),
+            )
+
+            duree_prog = int(get_reglage(cursor, 6, 120))
+            arrosage_auto_actif = bool(get_reglage(cursor, 7, 1) == 1)
+            alerte_email_active = bool(get_reglage(cursor, 8, 1) == 1)
+
+            # Dernière mesure réellement reçue pour les cartes (et non la
+            # dernière de la plage affichée, qui peut être vide).
+            cursor.execute("SELECT * FROM sensors ORDER BY Id DESC LIMIT 1")
+            dernieres = cursor.fetchone()
+            last_record = dernieres['Temps'] if dernieres else None
+
+            line_labels = Temps
+            Temperature = data("rgba(186,125,125,1)", "rgba(186,125,125,1)", 'Température', Temperature_values)
+            Humidite = data("rgba(151,187,205,1)", "rgba(151,187,205,1)", 'Humidité', Humidite_values)
+            Hygrometrie_terre_blanc = data("rgba(153,204,255,1)", "rgba(153,204,255,1)", 'Hygrométrie terre (blanc)', Hygrometrie_terre_blanc_values)
+            Hygrometrie_terre_noir = data("rgba(0,128,255,1)", "rgba(0,128,255,1)", 'Hygrométrie terre (noir)', Hygrometrie_terre_noir_values)
+            Niveau_eau = data("rgba(245,75,39,1)", "rgba(245,75,39,1)", "Niveau eau", Remplissage_reservoir_values)
+            line_values_1 = [Temperature, Humidite]
+            line_values_2 = [Hygrometrie_terre_blanc, Hygrometrie_terre_noir]
+            line_values_3 = [Niveau_eau]
+
+            if last_record:
+                delta_last_record = int((maintenant - last_record).total_seconds())
+
+            if delta_last_record is None or delta_last_record > 600:
+                class2 = 'error'
+            else:
+                class2 = 'ok'
+
+            if delta_last_record is not None:
+                duree_depuis_dernier_enregistrement_fr = format_duration_fr(delta_last_record)
+                if delta_last_record > 86400:
+                    # Décalage de plus de 24h : le jour est plus informatif que l'heure seule
+                    last_record_display = "{} à {}".format(
+                        format_date_fr(last_record), last_record.strftime('%H:%M')
+                    )
+                else:
+                    last_record_display = last_record.strftime('%H:%M')
 
         return render_template(
             'home.html',
@@ -333,10 +437,20 @@ def home():
             dernieres=dernieres,
             historique_arrosages=historique_arrosages,
             heure_prog=heure_prog,
+            duree_prog=duree_prog,
+            duree_prog_options=DUREE_PROG_OPTIONS,
+            arrosage_auto_actif=arrosage_auto_actif,
+            alerte_email_active=alerte_email_active,
             selected_range=selected_range,
             range_options=RANGE_OPTIONS,
             chart_unit=range_conf['unit'],
             arrosage_instants=arrosage_instants,
+            exterieur_actif=exterieur_actif,
+            interieur_dernier=interieur_dernier,
+            interieur_minmax=interieur_minmax,
+            interieur_age_fr=interieur_age_fr,
+            interieur_ok=interieur_ok,
+            datasets_interieur=datasets_interieur,
         )
     return redirect(url_for('login'))
 

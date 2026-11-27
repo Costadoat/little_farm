@@ -1,0 +1,13 @@
+[Unit]
+Description=Récapitulatif Florentina et alerte en cas d'erreur
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=renaud
+Group=renaud
+WorkingDirectory=/sites/Florentina
+EnvironmentFile=/sites/Florentina/florentina.env
+ExecStart=/sites/Florentina/venv/bin/python /sites/Florentina/florentina.py
+UMask=0077

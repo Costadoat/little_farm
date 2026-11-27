@@ -16,6 +16,7 @@ from email.mime.text import MIMEText
 from datetime import datetime, timedelta
 
 import MySQLdb
+import MySQLdb.cursors
 
 from local_settings import DATABASE, EMAIL_CONFIG, NIVEAU_ALERTE_PCT, \
     NIVEAU_RETOUR_NORMAL_PCT, DELAI_MIN_ENTRE_ALERTES_HEURES
@@ -25,6 +26,7 @@ def send_email(subject, body):
     msg = MIMEText(body)
     msg['Subject'] = subject
     msg['From'] = EMAIL_CONFIG['EMAIL_FROM']
+    msg['Reply-To'] = 'admin@costadoat.fr'
     msg['To'] = EMAIL_CONFIG['EMAIL_TO']
 
     with smtplib.SMTP(EMAIL_CONFIG['SMTP_HOST'], EMAIL_CONFIG['SMTP_PORT']) as server:
@@ -39,6 +41,14 @@ def main():
         user=DATABASE['USER'], passwd=DATABASE['PASSWORD'], db=DATABASE['BASE']
     )
     cursor = conn.cursor(MySQLdb.cursors.DictCursor)
+
+    # Système extérieur déclaré débranché depuis le site (reglages.Id=10)
+    cursor.execute("SELECT valeur FROM reglages WHERE Id=10")
+    reglage = cursor.fetchone()
+    if reglage and reglage['valeur'] == 0:
+        cursor.close()
+        conn.close()
+        return
 
     cursor.execute("SELECT Temps, remplissage_reservoir FROM sensors ORDER BY Id DESC LIMIT 1")
     last = cursor.fetchone()

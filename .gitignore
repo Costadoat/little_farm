@@ -1,0 +1,47 @@
+# --- Secrets (ne JAMAIS publier) ---
+.env
+.env.*
+!.env.example
+*.env
+!*.env.example
+
+# --- Copies de sauvegarde d’éditeur ---
+*~
+*.bak
+*.orig
+*.swp
+.DS_Store
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+myenv/
+*.sqlite3
+
+# --- Node / builds ---
+node_modules/
+dist/
+
+# --- Journaux ---
+*.log
+logs/
+
+# --- Florentina ---
+credentials.json
+token.json
+dernier_envoi.txt
+
+# --- Autres fichiers sensibles (où qu’ils soient) ---
+**/config.php
+**/local_settings.py
+credentials*.json
+token*.json
+*.pem
+*.key
+*.ovpn
+# Sauvegardes de base de données
+*.sql.gz
+*.dump
+dump*.sql
