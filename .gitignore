@@ -28,10 +28,9 @@ dist/
 *.log
 logs/
 
-# --- Florentina ---
-credentials.json
-token.json
-dernier_envoi.txt
+# --- Jardin ---
+display/local_settings.py
+*.sock
 
 # --- Autres fichiers sensibles (où qu’ils soient) ---
 **/config.php
